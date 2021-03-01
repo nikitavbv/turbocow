@@ -3,6 +3,7 @@ use std::path::Path;
 
 use custom_error::custom_error;
 use libloading::{Library, Symbol};
+use log::*;
 
 use crate::models::{ImageReader, ImageWriter};
 
@@ -35,7 +36,7 @@ impl PluginManager {
     }
 
     pub fn load_plugins(&mut self, plugins_directory: Box<&Path>) -> Result<Vec<Box<dyn ImageFormatSupportPlugin>>, PluginManagerError> {
-        println!("loading plugins...");
+        info!("loading plugins...");
         
         let plugins: Vec<Box<dyn ImageFormatSupportPlugin>> = fs::read_dir(plugins_directory.as_ref())
             .map_err(|err| PluginManagerError::IOError { description: err.to_string() })?
@@ -48,17 +49,17 @@ impl PluginManager {
             .map(|v| (v.clone(), self.load_plugin(&v)))
             .filter_map(|(path, v)| match v {
                 Ok(v) => {
-                    println!("loaded plugin: support for {}",  v.format_name());
+                    info!("loaded plugin: support for {}",  v.format_name());
                     Some(v)
                 },
                 Err(err) => {
-                    println!("failed to load plugin ({}): {}", path.to_string_lossy(), err);
+                    error!("failed to load plugin ({}): {}", path.to_string_lossy(), err);
                     None
                 }
             })
             .collect();
 
-        println!("loaded {} plugins", plugins.len());
+        info!("loaded {} plugins", plugins.len());
 
         Ok(plugins)
     }
