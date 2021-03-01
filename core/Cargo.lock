@@ -12,8 +12,15 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "core"
 version = "0.1.0"
 dependencies = [
+ "custom_error",
  "libloading",
 ]
+
+[[package]]
+name = "custom_error"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51ac5e99a7fea3ee8a03fa4721a47e2efd3fbb38358fc61192a54d4c6f866c12"
 
 [[package]]
 name = "libloading"

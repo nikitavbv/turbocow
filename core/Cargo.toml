@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 libloading = "0.7.0"
+custom_error = "1.8.0"

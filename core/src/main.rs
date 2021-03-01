@@ -1,24 +1,23 @@
+#![feature(box_syntax)]
+
 extern crate libloading;
+extern crate custom_error;
 
-use libloading::{Library, Symbol};
+use std::path::Path;
 
-use models::ImageReader;
+use plugins::PluginManager;
 
 pub mod models;
-
-type ReaderProvider = unsafe fn() -> Box<dyn ImageReader>;
+pub mod plugins;
+pub mod utils;
 
 fn main() {
-    println!("Hello, world!");
+    utils::print_intro();
 
-    unsafe { 
-        let lib = Library::new("./plugins/libbmp_support.so")
-            .expect("failed to load bmp plugin");
-        let func: Symbol<ReaderProvider> = lib.get(b"init_reader").unwrap();
-    
-        let reader = func();
-        reader.read(&[]);
-
-        println!("done");
+    let mut plugin_manager = PluginManager::new();
+    if let Err(err) = plugin_manager.load_plugins(box Path::new("plugins")) {
+        println!("failed to load plugins: {}", err);
     }
+
+    println!("done");
 }
