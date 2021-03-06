@@ -1,5 +1,5 @@
 .cargo_base:
-  image: $CI_REGISTRY_IMAGE/rust_openssl:0.1.6
+  image: $CI_REGISTRY_IMAGE/rust_openssl:0.1.17
   cache:
     paths:
       - $CRATE_NAME/target
@@ -20,8 +20,10 @@
   needs: []
   except:
     - tags
+  variables:
+    CARGO_ARGS: ''
   script:
-    - cd $CRATE_NAME && cargo +nightly build --release && cd ..
+    - cd $CRATE_NAME && cargo +nightly build --release $CARGO_ARGS && cd ..
 
 .cargo_build_executable:
   extends: .cargo_build
@@ -32,6 +34,11 @@
   only:
     refs:
       - master
+
+.cargo_build_executable_windows:
+  extend: .cargo_build_executable
+  variables:
+    CARGO_ARGS: '--target x86_64-pc-windows-gnu'
 
 .cargo_build_lib:
   extends: .cargo_build

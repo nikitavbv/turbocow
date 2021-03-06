@@ -14,3 +14,8 @@ converter build:
   extends: 
     - .cargo_build_executable
     - .converter
+
+converter build windows:
+  extends:
+    - .cargo_build_executable_windows
+    - .converter
