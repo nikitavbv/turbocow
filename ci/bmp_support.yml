@@ -18,5 +18,5 @@ bmp support build:
 
 bmp support deploy:
   extends:
-    - .storage_upload
+    - .plugin_deploy
     - .bmp_support
