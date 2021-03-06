@@ -36,7 +36,7 @@
       - master
 
 .cargo_build_executable_windows:
-  extend: .cargo_build_executable
+  extends: .cargo_build_executable
   variables:
     CARGO_ARGS: '--target x86_64-pc-windows-gnu'
 
