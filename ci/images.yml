@@ -26,3 +26,12 @@ build deploy tools:
       - images/deploy_tools.Dockerfile
       - ci/images.yml
       - ci/templates.yml
+
+build nginx:
+  extends: .build_util_image
+  variables:
+    IMAGE_NAME: nginx
+    DOCKERFILE_NAME: nginx
+  only:
+    changes:
+      - images/nginx.Dockerfile
