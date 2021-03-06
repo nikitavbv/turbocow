@@ -6,7 +6,7 @@ variables:
   IMAGE_VERSION_PREFIX: '0.1'
 
 .cargo_base:
-  image: $CI_REGISTRY_IMAGE/rust_openssl:0.1.1
+  image: $CI_REGISTRY_IMAGE/rust_openssl:0.1.6
   cache:
     paths:
       - $CRATE_NAME/target

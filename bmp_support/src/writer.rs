@@ -4,7 +4,7 @@ pub struct BMPWriter {
 
 impl ImageWriter for BMPWriter {
     
-    fn write(&self, image: &Image) -> Vec<u8> {
+    fn write(&self, _image: &Image) -> Vec<u8> {
         println!("writing bmp image");
 
         Vec::new()
