@@ -71,7 +71,6 @@ variables:
 .service_build:
   extends: .image_build
   stage: images
-  needs: ["$CRATE_NAME test", "$CRATE_NAME build"]
   variables:
     IMAGE_NAME: $CRATE_NAME
     DOCKERFILE_NAME: Dockerfile_service
@@ -131,6 +130,7 @@ core image:
   extends: 
     - .service_build
     - .core
+  needs: ['core test', 'core build']
 
 # converter
 .converter:
