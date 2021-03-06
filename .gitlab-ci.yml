@@ -8,8 +8,9 @@ variables:
 .cargo_base:
   image: $CI_REGISTRY_IMAGE/rust_openssl:0.1.1
   cache:
-    - $CRATE_NAME/target
-    - .cargo
+    paths:
+      - $CRATE_NAME/target
+      - .cargo
 
 .cargo_test:
   extends: .cargo_base
