@@ -1,5 +1,6 @@
 stages:
   - build
+  - images
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
@@ -36,6 +37,9 @@ variables:
     paths:
       - $CRATE_NAME/target/release/$CRATE_NAME
     expire_in: 1 week
+  only:
+    refs:
+      - master
 
 .cargo_build_lib:
   extends: .cargo_build
@@ -43,61 +47,105 @@ variables:
     paths:
       - $CRATE_NAME/target/release/lib$CRATE_NAME.so
     expire_in: 1 week
+  only:
+    refs:
+      - master
 
-build rust openssl:
-  stage: build
+.image_build:
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: ['']
-  needs: []
   only:
     refs:
       - master
   variables:
-    IMAGE_TAG: $CI_REGISTRY_IMAGE/rust_openssl:$IMAGE_VERSION_PREFIX.$CI_PIPELINE_IID
+    IMAGE_TAG: $CI_REGISTRY_IMAGE/$IMAGE_NAME:$IMAGE_VERSION_PREFIX.$CI_PIPELINE_IID
+    DOCKERFILE_PATH: images/$DOCKERFILE_NAME
+    KANIKO_ARGS: ''
   script:
     - mkdir -p /kaniko/.docker
     - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"gitlab-ci-token\",\"password\":\"$CI_JOB_TOKEN\"}}}" > /kaniko/.docker/config.json
-    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/images/Dockerfile_rust_openssl --destination $IMAGE_TAG
+    - /kaniko/executor --context $CI_PROJECT_DIR $KANIKO_ARGS --dockerfile $CI_PROJECT_DIR/$DOCKERFILE_PATH --destination $IMAGE_TAG
     - echo Built $IMAGE_TAG
+
+.service_build:
+  extends: .image_build
+  stage: images
+  needs: ["$CRATE_NAME test", "$CRATE_NAME build"]
+  variables:
+    IMAGE_NAME: $CRATE_NAME
+    DOCKERFILE_NAME: Dockerfile_service
+    KANIKO_ARGS: "--build-arg CRATE_NAME=$CRATE_NAME"
+
+build rust openssl:
+  extends: .image_build
+  stage: build
+  needs: []
+  variables:
+    IMAGE_NAME: rust_openssl
+    DOCKERFILE_NAME: Dockerfile_rust_openssl
   only:
     changes:
       - images/Dockerfile_rust_openssl
     refs:
       - master
 
-bmp support test:
-  extends: .cargo_test
+# libs
+# bmp support
+.bmp_support:
   variables:
     CRATE_NAME: bmp_support
   only:
     changes:
       - bmp_support/**/*
+
+bmp support test:
+  extends: 
+    - .cargo_test
+    - .bmp_support
 
 bmp support build:
-  extends: .cargo_build_lib
+  extends: 
+    - .cargo_build_lib
+    - .bmp_support
+
+# core
+.core:
   variables:
-    CRATE_NAME: bmp_support
+    CRATE_NAME: converter
   only:
     changes:
-      - bmp_support/**/*
-    refs:
-      - master
+      - converter/**/*
 
 core test:
-  extends: .cargo_test
-  variables:
-    CRATE_NAME: core
-  only:
-    changes:
-      - core/**/*
+  extends: 
+    - .cargo_test
+    - .core
 
 core build:
-  extends: .cargo_build_service
+  extends:
+    - .cargo_build_executable
+    - .core
+
+core image:
+  extends: 
+    - .service_build
+    - .core
+
+# converter
+.converter:
   variables:
-    CRATE_NAME: core
+    CRATE_NAME: converter
   only:
     changes:
-      - core/**/*
-    refs:
-      - master
+      - converter/**/*
+
+converter test:
+  extends: 
+    - .cargo_test
+    - .converter
+
+converter build:
+  extends: 
+    - .cargo_build_executable
+    - .converter

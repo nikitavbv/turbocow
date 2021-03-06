@@ -1,5 +1,5 @@
 [package]
-name = "lab1"
+name = "converter"
 version = "0.1.0"
 authors = ["Nikita Volobuev <nikitavbv@gmail.com>"]
 edition = "2018"
