@@ -5,6 +5,7 @@
   only:
     changes:
       - core/**/*
+      - images/service.Dockerfile
 
 core test:
   extends: 
