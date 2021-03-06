@@ -5,11 +5,40 @@ variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
   IMAGE_VERSION_PREFIX: '0.1'
 
+.cargo_base:
+  image: $CI_REGISTRY_IMAGE/rust_openssl:0.1.1
+  cache:
+    - $CRATE_NAME/target
+    - .cargo
+
+.cargo_test:
+  extends: .cargo_base
+  stage: build
+  needs: []
+  except:
+    - tags
+  script:
+    - cd $CRATE_NAME && cargo test && cd ..
+
+.cargo_build:
+  extends: .cargo_base
+  stage: build
+  needs: []
+  except:
+    - tags
+  script:
+    - cd $CRATE_NAME && cargo build --release && cd ..
+  artifacts:
+    paths:
+      - $CRATE_NAME/target/release/$CRATE_NAME
+    expire_in: 1 week
+
 build rust openssl:
   stage: build
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: ['']
+  needs: []
   only:
     refs:
       - master
@@ -17,3 +46,44 @@ build rust openssl:
     - mkdir -p /kaniko/.docker
     - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"gitlab-ci-token\",\"password\":\"$CI_JOB_TOKEN\"}}}" > /kaniko/.docker/config.json
     - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/images/Dockerfile_rust_openssl --destination $CI_REGISTRY_IMAGE/rust_openssl:$IMAGE_VERSION_PREFIX.$CI_PIPELINE_IID
+  only:
+    changes:
+      - images/Dockerfile_rust_openssl
+    refs:
+      - master
+
+bmp support test:
+  extends: .cargo_test
+  variables:
+    CRATE_NAME: bmp_support
+  only:
+    changes:
+      - bmp_support/**/*
+
+bmp support build:
+  extends: .cargo_build
+  variables:
+    CRATE_NAME: bmp_support
+  only:
+    changes:
+      - bmp_support/**/*
+    refs:
+      - master
+
+core test:
+  extends: .cargo_test
+  variables:
+    CRATE_NAME: core
+  only:
+    changes:
+      - core/**/*
+
+core build:
+  extends: .cargo_build
+  variables:
+    CRATE_NAME: core
+  only:
+    chanages:
+      - core/**/*
+    refs:
+      - master
