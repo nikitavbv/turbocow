@@ -122,4 +122,4 @@
   except:
     - tags
   script:
-    - gsutil cp $CRATE_NAME/target/x86_64-pc-windows-gnu/release/$CRATE_NAME gs://turbocow/releases/$CRATE_NAME.exe
+    - gsutil cp $CRATE_NAME/target/x86_64-pc-windows-gnu/release/$CRATE_NAME.exe gs://turbocow/releases/$CRATE_NAME.exe
