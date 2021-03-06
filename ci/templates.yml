@@ -57,7 +57,7 @@
     - mkdir -p /kaniko/.docker
     - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"gitlab-ci-token\",\"password\":\"$CI_JOB_TOKEN\"}}}" > /kaniko/.docker/config.json
     - /kaniko/executor --context $CI_PROJECT_DIR $KANIKO_ARGS --dockerfile $CI_PROJECT_DIR/$DOCKERFILE_PATH --destination $CI_REGISTRY_IMAGE/$IMAGE_NAME:$IMAGE_VERSION_PREFIX.$CI_PIPELINE_IID
-    - echo Built $IMAGE_TAG
+    - echo built $CI_REGISTRY_IMAGE/$IMAGE_NAME:$IMAGE_VERSION_PREFIX.$CI_PIPELINE_IID
 
 .service_build:
   extends: .image_build
