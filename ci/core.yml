@@ -1,7 +1,7 @@
 .core:
   variables:
-    CRATE_NAME: converter
-    IMAGE_NAME: converter
+    CRATE_NAME: core
+    IMAGE_NAME: core
   only:
     changes:
       - core/**/*
