@@ -4,6 +4,7 @@
   only:
     changes:
       - converter/**/*
+      - ci/converter.yml
 
 converter test:
   extends: 
