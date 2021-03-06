@@ -1,0 +1,19 @@
+stages:
+  - build
+
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  IMAGE_VERSION_PREFIX: '0.1'
+
+build rust openssl:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: ['']
+  only:
+    refs:
+      - master
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"gitlab-ci-token\",\"password\":\"$CI_JOB_TOKEN\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/images/Dockerfile_rust_openssl --destination $CI_REGISTRY_IMAGE/rust_openssl:$IMAGE_VERSION_PREFIX.$CI_PIPELINE_IID
