@@ -26,3 +26,4 @@ build deploy tools:
     changes:
       - images/deploy_tools.Dockerfile
       - ci/images.yml
+      - ci/templates.yml
