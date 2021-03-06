@@ -9,8 +9,6 @@
   extends: .cargo_base
   stage: build
   needs: []
-  except:
-    - tags
   script:
     - cd $CRATE_NAME && cargo +nightly test && cd ..
 
@@ -18,8 +16,6 @@
   extends: .cargo_base
   stage: build
   needs: []
-  except:
-    - tags
   variables:
     CARGO_ARGS: ''
   script:
