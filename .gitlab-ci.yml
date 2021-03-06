@@ -29,9 +29,19 @@ variables:
     - tags
   script:
     - cd $CRATE_NAME && cargo +nightly build --release && cd ..
+
+.cargo_build_executable:
+  extends: .cargo_build
   artifacts:
     paths:
       - $CRATE_NAME/target/release/$CRATE_NAME
+    expire_in: 1 week
+
+.cargo_build_lib:
+  extends: .cargo_build
+  artifacts:
+    paths:
+      - $CRATE_NAME/target/release/lib$CRATE_NAME.so
     expire_in: 1 week
 
 build rust openssl:
@@ -65,7 +75,7 @@ bmp support test:
       - bmp_support/**/*
 
 bmp support build:
-  extends: .cargo_build
+  extends: .cargo_build_lib
   variables:
     CRATE_NAME: bmp_support
   only:
@@ -83,7 +93,7 @@ core test:
       - core/**/*
 
 core build:
-  extends: .cargo_build
+  extends: .cargo_build_service
   variables:
     CRATE_NAME: core
   only:
