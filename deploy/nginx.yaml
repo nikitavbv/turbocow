@@ -1,0 +1,63 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: turbocow
+  labels:
+    app: nginx
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: storage-nginx
+          image: registry.gitlab.com/turbocow/turbocow/nginx:0.1.26
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              memory: 100M
+              cpu: '250m'
+            requests:
+              memory: 5M
+              cpu: '1m'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: turbocow
+spec:
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: turbocow
+  namespace: turbocow
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+spec:
+  rules:
+  - host: turbocow.nikitavbv.com
+    http:
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: nginx
+              port:
+                number: 80

@@ -3,3 +3,5 @@
 target
 
 core/plugins/*.so
+
+deploy/secrets.yaml
