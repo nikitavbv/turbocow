@@ -15,6 +15,7 @@ build rust openssl:
     changes:
       - images/rust_openssl.Dockerfile
       - ci/images.yml
+      - ci/templates.yml
 
 build deploy tools:
   extends: .build_util_image
