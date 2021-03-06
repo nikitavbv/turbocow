@@ -65,3 +65,13 @@
   variables:
     DOCKERFILE_NAME: service
     KANIKO_ARGS: "--build-arg CRATE_NAME=$CRATE_NAME"
+
+.storage_upload:
+  stage: deploy
+  before_script:
+    - gcloud auth activate-service-account --key-file $SERVICE_ACCOUNT_FILE
+  
+.plugin_deploy:
+  extends: .storage_upload
+  script:
+    - gsutil cp $CRATE_NAME/target/release/lib$CRATE_NAME.so gs://turbocow/plugins/lib$CRATE_NAME.so

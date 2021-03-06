@@ -1,6 +1,7 @@
 stages:
   - build
   - images
+  - deploy
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/.cargo
