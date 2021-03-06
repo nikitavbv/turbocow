@@ -1,16 +1,3 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cloud-storage-proxy-conf
-  namespace: turbocow
-  labels:
-    name: cloud-storage-proxy-conf
-data:
-  config.toml: |-
-    [buckets.turbocow]
-    host = "turbocow.nikitavbv.com"
-    bucket = "turbocow"
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,19 +17,24 @@ spec:
     spec:
       containers:
       - name: cloud-storage-proxy
-        image: nikitavbv/cloud-storage-proxy:0.2.0
+        image: pottava/s3-proxy:2.0
         ports:
-        - containerPort: 8080
-        volumeMounts:
-        - name: service-account-key
-          mountPath: '/etc/secrets'
-        - name: config
-          mountPath: '/etc/config'
+        - containerPort: 80
         env:
-        - name: SERVICE_ACCOUNT_KEY_FILE
-          value: /etc/secrets/cloud-storage-proxy-key
-        - name: CONFIG_FILE
-          value: /etc/config/config.toml
+        - name: AWS_S3_BUCKET
+          value: turbocow
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: gcs-access-key
+              key: gcs-access-key
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: gcs-secret-key
+              key: gcs-secret-key
+        - name: AWS_API_ENDPOINT
+          value: https://storage.googleapis.com
         resources:
           limits:
             memory: 100M
@@ -50,14 +42,6 @@ spec:
           requests:
             memory: 5M
             cpu: '1m'
-      volumes:
-      - name: service-account-key
-        secret:
-          secretName: cloud-storage-proxy-key
-      - name: config
-        configMap:
-          defaultMode: 420
-          name: cloud-storage-proxy-conf
 ---
 apiVersion: v1
 kind: Service
@@ -70,4 +54,4 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 8080
+    targetPort: 80
