@@ -5,6 +5,7 @@
     changes:
       - bmp_support/**/*
       - ci/bmp_support.yml
+      - ci/templates.yml
 
 bmp support test:
   extends: 
