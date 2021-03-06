@@ -1,0 +1,12 @@
+build rust openssl:
+  extends: .image_build
+  stage: build
+  needs: []
+  variables:
+    IMAGE_NAME: rust_openssl
+    DOCKERFILE_NAME: Dockerfile_rust_openssl
+  only:
+    changes:
+      - images/Dockerfile_rust_openssl
+    refs:
+      - master

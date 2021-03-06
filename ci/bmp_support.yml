@@ -1,0 +1,16 @@
+.bmp_support:
+  variables:
+    CRATE_NAME: bmp_support
+  only:
+    changes:
+      - bmp_support/**/*
+
+bmp support test:
+  extends: 
+    - .cargo_test
+    - .bmp_support
+
+bmp support build:
+  extends: 
+    - .cargo_build_lib
+    - .bmp_support

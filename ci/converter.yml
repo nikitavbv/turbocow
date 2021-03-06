@@ -1,0 +1,16 @@
+.converter:
+  variables:
+    CRATE_NAME: converter
+  only:
+    changes:
+      - converter/**/*
+
+converter test:
+  extends: 
+    - .cargo_test
+    - .converter
+
+converter build:
+  extends: 
+    - .cargo_build_executable
+    - .converter

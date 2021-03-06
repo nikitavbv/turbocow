@@ -1,0 +1,22 @@
+.core:
+  variables:
+    CRATE_NAME: converter
+  only:
+    changes:
+      - core/**/*
+
+core test:
+  extends: 
+    - .cargo_test
+    - .core
+
+core build:
+  extends:
+    - .cargo_build_executable
+    - .core
+
+core image:
+  extends: 
+    - .service_build
+    - .core
+  needs: ['core test', 'core build']
