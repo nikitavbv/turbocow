@@ -3,7 +3,6 @@
   stage: build
   needs: []
   variables:
-    DOCKERFILE_NAME: "$IMAGE_NAME"
   only:
     refs:
       - master
@@ -12,6 +11,7 @@ build rust openssl:
   extends: .build_util_image
   variables:
     IMAGE_NAME: rust_openssl
+    DOCKERFILE_NAME: rust_openssl
   only:
     changes:
       - images/rust_openssl.Dockerfile
@@ -21,6 +21,7 @@ build deploy tools:
   extends: .build_util_image
   variables:
     IMAGE_NAME: deploy_tools
+    DOCKERFILE_NAME: deploy_tools
   only:
     changes:
       - images/deploy_tools.Dockerfile
