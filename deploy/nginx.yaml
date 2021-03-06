@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: storage-nginx
-          image: registry.gitlab.com/turbocow/turbocow/nginx:0.1.31
+          image: registry.gitlab.com/turbocow/turbocow/nginx:0.1.32
           ports:
             - containerPort: 80
           resources:
