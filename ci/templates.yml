@@ -52,7 +52,7 @@
       - master
   variables:
     IMAGE_TAG: $CI_REGISTRY_IMAGE/$IMAGE_NAME:$IMAGE_VERSION_PREFIX.$CI_PIPELINE_IID
-    DOCKERFILE_PATH: images/$DOCKERFILE_NAME
+    DOCKERFILE_PATH: images/$DOCKERFILE_NAME.Dockerfile
     KANIKO_ARGS: ''
   script:
     - mkdir -p /kaniko/.docker
@@ -65,5 +65,5 @@
   stage: images
   variables:
     IMAGE_NAME: $CRATE_NAME
-    DOCKERFILE_NAME: Dockerfile_service
+    DOCKERFILE_NAME: service
     KANIKO_ARGS: "--build-arg CRATE_NAME=$CRATE_NAME"
