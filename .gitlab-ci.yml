@@ -114,7 +114,7 @@ bmp support build:
     CRATE_NAME: converter
   only:
     changes:
-      - converter/**/*
+      - core/**/*
 
 core test:
   extends: 
