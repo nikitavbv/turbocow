@@ -21,3 +21,4 @@ bmp support deploy:
   extends:
     - .plugin_deploy
     - .bmp_support
+  needs: ['bmp support build']
