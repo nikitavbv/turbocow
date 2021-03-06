@@ -19,7 +19,7 @@ variables:
   except:
     - tags
   script:
-    - cd $CRATE_NAME && cargo test && cd ..
+    - cd $CRATE_NAME && cargo +nightly test && cd ..
 
 .cargo_build:
   extends: .cargo_base
@@ -28,7 +28,7 @@ variables:
   except:
     - tags
   script:
-    - cd $CRATE_NAME && cargo build --release && cd ..
+    - cd $CRATE_NAME && cargo +nightly build --release && cd ..
   artifacts:
     paths:
       - $CRATE_NAME/target/release/$CRATE_NAME
