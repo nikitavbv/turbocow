@@ -42,6 +42,8 @@
     paths:
       - $CRATE_NAME/target/release/lib$CRATE_NAME.so
     expire_in: 1 week
+  except:
+    - tags
   only:
     refs:
       - master
@@ -50,6 +52,8 @@
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: ['']
+  except:
+    - tags
   only:
     refs:
       - master
@@ -77,5 +81,7 @@
   
 .plugin_deploy:
   extends: .storage_upload
+  except:
+    - tags
   script:
     - gsutil cp $CRATE_NAME/target/release/lib$CRATE_NAME.so gs://turbocow/plugins/lib$CRATE_NAME.so
