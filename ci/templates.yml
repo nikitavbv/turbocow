@@ -64,6 +64,5 @@
   extends: .image_build
   stage: images
   variables:
-    IMAGE_NAME: $CRATE_NAME
     DOCKERFILE_NAME: service
     KANIKO_ARGS: "--build-arg CRATE_NAME=$CRATE_NAME"
