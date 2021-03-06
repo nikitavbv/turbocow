@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloud-storage-proxy-conf
+  namespace: turbocow
+  labels:
+    name: cloud-storage-proxy-conf
+data:
+  config.toml: |-
+    [buckets.turbocow]
+    host = "turbocow.nikitavbv.com"
+    bucket = "turbocow"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-storage-proxy
+  namespace: turbocow
+  labels:
+    app: cloud-storage-proxy
+spec:
+  selector:
+    matchLabels:
+      app: cloud-storage-proxy
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: cloud-storage-proxy
+    spec:
+      containers:
+      - name: cloud-storage-proxy
+        image: nikitavbv/cloud-storage-proxy:0.2.0
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: service-account-key
+          mountPath: '/etc/secrets'
+        - name: config
+          mountPath: '/etc/config'
+        env:
+        - name: SERVICE_ACCOUNT_KEY_FILE
+          value: /etc/secrets/cloud-storage-proxy-key
+        - name: CONFIG_FILE
+          value: /etc/config/config.toml
+        resources:
+          limits:
+            memory: 100M
+            cpu: '250m'
+          requests:
+            memory: 5M
+            cpu: '1m'
+      volumes:
+      - name: service-account-key
+        secret:
+          secretName: cloud-storage-proxy-key
+      - name: config
+        configMap:
+          defaultMode: 420
+          name: cloud-storage-proxy-conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloud-storage-proxy
+  namespace: turbocow
+spec:
+  selector:
+    app: cloud-storage-proxy
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
