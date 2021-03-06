@@ -1,0 +1,11 @@
+[package]
+name = "ppm_support"
+version = "0.1.0"
+authors = ["Nikita Volobuev <nikitavbv@gmail.com>", "Pavlo Myroniuk <pspos.developqkation@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+core = { path = "../core" }
