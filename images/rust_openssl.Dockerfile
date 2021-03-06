@@ -20,6 +20,5 @@ ENV OPENSSL_DIR=/openssl
 ENV OPENSSL_STATIC=/openssl
 
 RUN rustup target add x86_64-pc-windows-gnu
-RUN rustup target install stable-x86_64-pc-windows-gnu
 
 RUN rustup install nightly
