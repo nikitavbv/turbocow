@@ -6,6 +6,8 @@
     changes:
       - core/**/*
       - images/service.Dockerfile
+      - ci/templates.yml
+      - ci/core.yml
 
 core test:
   extends: 
