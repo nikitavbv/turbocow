@@ -18,3 +18,5 @@ RUN cd openssl && \
 
 ENV OPENSSL_DIR=/openssl
 ENV OPENSSL_STATIC=/openssl
+
+RUN rustup install nightly
