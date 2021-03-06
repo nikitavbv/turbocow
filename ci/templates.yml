@@ -71,7 +71,7 @@
 
 .service_build:
   extends: .image_build
-  stage: images
+  stage: deploy
   variables:
     DOCKERFILE_NAME: service
     KANIKO_ARGS: "--build-arg CRATE_NAME=$CRATE_NAME"
