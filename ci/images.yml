@@ -2,7 +2,6 @@
   extends: .image_build
   stage: build
   needs: []
-  variables:
   only:
     refs:
       - master
