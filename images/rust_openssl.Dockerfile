@@ -3,7 +3,7 @@ FROM ubuntu:focal
 ENV TZ=Europe/Kiev
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN apt-get update && apt-get install -y git make curl gcc pkg-config libssl-dev
+RUN apt-get update && apt-get install -y git make curl gcc pkg-config libssl-dev mingw-w64
 RUN curl https://sh.rustup.rs -sSf > rustup.sh && chmod +x rustup.sh && bash rustup.sh -y
 ENV PATH="$PATH:/root/.cargo/bin"
 
@@ -19,6 +19,6 @@ RUN cd openssl && \
 ENV OPENSSL_DIR=/openssl
 ENV OPENSSL_STATIC=/openssl
 
-RUN rustup target add x86_64-pc-windows-gnu
-
 RUN rustup install nightly
+
+RUN rustup target add x86_64-pc-windows-gnu --toolchain nightly

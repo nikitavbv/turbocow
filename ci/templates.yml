@@ -35,6 +35,9 @@
   extends: .cargo_build_executable
   variables:
     CARGO_ARGS: '--target x86_64-pc-windows-gnu'
+  artifacts:
+    paths:
+      - $CRATE_NAME/target/x86_64-pc-windows-gnu/release/$CRATE_NAME.exe
 
 .cargo_build_lib:
   extends: .cargo_build
@@ -85,3 +88,17 @@
     - tags
   script:
     - gsutil cp $CRATE_NAME/target/release/lib$CRATE_NAME.so gs://turbocow/plugins/lib$CRATE_NAME.so
+
+.executable_deploy:
+  extends: .storage_upload
+  except:
+    - tags
+  script:
+    - gsutil cp $CRATE_NAME/target/release/$CRATE_NAME gs://turbocow/releases/$CRATE_NAME
+
+.executable_deploy_windows:
+  extends: .storage_upload
+  except:
+    - tags
+  script:
+    - gsutil cp $CRATE_NAME/target/x86_64-pc-windows-gnu/release/$CRATE_NAME gs://turbocow/releases/$CRATE_NAME.exe

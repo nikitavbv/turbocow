@@ -20,3 +20,15 @@ converter build windows:
   extends:
     - .cargo_build_executable_windows
     - .converter
+
+converter deploy:
+  extends: 
+    - .executable_deploy
+    - .converter
+  needs: ['converter build']
+
+converter deploy windows:
+  extends:
+    - .executable_deploy_windows
+    - .converter
+  needs: ['converter build windows']
