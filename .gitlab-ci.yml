@@ -84,7 +84,7 @@ core build:
   variables:
     CRATE_NAME: core
   only:
-    chanages:
+    changes:
       - core/**/*
     refs:
       - master
