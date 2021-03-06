@@ -1,5 +1,5 @@
 .cargo_base:
-  image: $CI_REGISTRY_IMAGE/rust_openssl:0.1.41
+  image: $CI_REGISTRY_IMAGE/rust_openssl:0.1.51
   cache:
     paths:
       - $CRATE_NAME/target
@@ -51,6 +51,20 @@
     refs:
       - master
 
+.cargo_build_lib_windows:
+  extends: .cargo_build
+  variables:
+    CARGO_ARGS: '--target x86_64-pc-windows-gnu'
+  artifacts:
+    paths:
+      - $CRATE_NAME/target/x86_64-pc-windows-gnu/release/$CRATE_NAME.dll
+    expire_in: 1 week
+  except:
+    - tags
+  only:
+    refs:
+      - master
+
 .image_build:
   image:
     name: gcr.io/kaniko-project/executor:debug
@@ -88,6 +102,13 @@
     - tags
   script:
     - gsutil cp $CRATE_NAME/target/release/lib$CRATE_NAME.so gs://turbocow/plugins/lib$CRATE_NAME.so
+
+.plugin_deploy_windows:
+  extends: .storage_upload
+  except:
+    - tags
+  script:
+    - gsutil cp $CRATE_NAME/target/x86_64-pc-windows-gnu/release/$CRATE_NAME.dll gs://turbocow/plugins/$CRATE_NAME.dll
 
 .executable_deploy:
   extends: .storage_upload

@@ -17,8 +17,19 @@ bmp support build:
     - .cargo_build_lib
     - .bmp_support
 
+bmp support build windows:
+  extends: 
+    - .cargo_build_lib_windows
+    - .bmp_support
+
 bmp support deploy:
   extends:
     - .plugin_deploy
     - .bmp_support
   needs: ['bmp support build']
+
+bmp support deploy windows:
+  extends:
+    - .plugin_deploy_windows
+    - .bmp_support
+  needs: ['bmp support build windows']
