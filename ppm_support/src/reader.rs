@@ -1,5 +1,12 @@
 use core::models::{ImageReader, Image, Pixel, ImageIOError};
+use custom_error::custom_error;
 use std::str::from_utf8;
+
+custom_error! {pub PPMReaderError
+    InvalidHeader {description: String} = "Invalid header: {description}",
+    InvalidRaster {description: String} = "Invalid raster: {description}",
+    InvalidNumber {description: String} = "Invalid number format: {description}",
+}
 
 #[derive(Debug)]
 struct Header {
@@ -10,7 +17,7 @@ struct Header {
 }
 
 trait RasterReader {
-    fn read_raster(&self, header: Header, data: &[u8]) -> Vec<Pixel>;
+    fn read_raster(&self, header: Header, data: &[u8]) -> Result<Vec<Pixel>, PPMReaderError>;
 }
 
 pub struct P3RasterReader {
@@ -24,30 +31,32 @@ impl P3RasterReader {
 }
 
 impl RasterReader for P3RasterReader {
-    fn read_raster(&self, header: Header, mut data: &[u8]) -> Vec<Pixel> {
+    fn read_raster(&self, header: Header, mut data: &[u8]) -> Result<Vec<Pixel>, PPMReaderError> {
         let mut pixels = Vec::new();
         let normalize = get_normalize_fn(header.max_color_value);
         for _ in 0..header.heigth {
             for _ in 0..header.width {
                 data = skip_whitespaces(data);
-                let (red, mut new_data) = read_number(data);
+                let (red, mut new_data) = read_number(data)?;
                 new_data = skip_whitespaces(new_data);
-                let (green, mut new_data) = read_number(new_data);
+                let (green, mut new_data) = read_number(new_data)?;
                 new_data = skip_whitespaces(new_data);
-                let (blue, new_data) = read_number(new_data);
+                let (blue, new_data) = read_number(new_data)?;
                 data = skip_whitespaces(new_data);
                 pixels.push(Pixel::from_rgb(normalize(red), normalize(green), normalize(blue)));
             }
         }
-        pixels
+        Result::Ok(pixels)
     }
 }
 
-fn get_raster_reader(magic_number: &str) -> Box<dyn RasterReader> {
+fn get_raster_reader(magic_number: &str) -> Result<Box<dyn RasterReader>, PPMReaderError> {
     match magic_number {
-        "P3" => box P3RasterReader::new(),
+        "P3" => Result::Ok(box P3RasterReader::new()),
         // "P6" => P6RasterReader::new(),
-        _ => panic!("Current PPM reader does not support {} magic number for PPM format.", magic_number),
+        _ => Result::Err(PPMReaderError::InvalidHeader {
+            description: format!("Current PPM reader does not support {} magic number for PPM format.", magic_number)
+        }),
     }
 }
 
@@ -60,12 +69,17 @@ fn is_whitespace(char: u8) -> bool {
     char == 9 || char == 10 || char == 13 ||  char == 32
 }
 
-fn read_number(data: &[u8]) -> (usize, &[u8]) {
+fn read_number(data: &[u8]) -> Result<(usize, &[u8]), PPMReaderError> {
     let mut i = 0;
     while data.len() > i && !is_whitespace(data[i]) {
         i += 1;
     }
-    (from_utf8(&data[0..i]).unwrap().parse::<usize>().unwrap(), &data[i..])
+    let number = from_utf8(&data[0..i]).map_err(|err| PPMReaderError::InvalidNumber {
+        description: format!("Unable to parse number: {}", err)
+    })?;
+    number.parse::<usize>().map_err(|err| PPMReaderError::InvalidNumber {
+        description: format!("Unable to parse number: {}", err)
+    }).map(|x| (x, &data[i..]))
 }
 
 fn skip_whitespaces(data: &[u8]) -> &[u8] {
@@ -93,26 +107,26 @@ fn skip_comments(data: &[u8]) -> &[u8] {
     }
 }
 
-fn read_header(mut data: &[u8]) -> (Header, &[u8]) {
+fn read_header(mut data: &[u8]) -> Result<(Header, &[u8]), PPMReaderError> {
     let magic_number = from_utf8(&data[0..2]).expect("Bad data for magic number in PPM header");
     data = &data[2..];
     data = skip_whitespaces(data);
     data = skip_comments(data);
-    let (width, mut data) = read_number(data);
+    let (width, mut data) = read_number(data)?;
     data = skip_whitespaces(data);
     data = skip_comments(data);
-    let (heigth, mut data) = read_number(data);
+    let (heigth, mut data) = read_number(data)?;
     data = skip_whitespaces(data);
     data = skip_comments(data);
-    let (max_color_value, mut data) = read_number(data);
+    let (max_color_value, mut data) = read_number(data)?;
     data = skip_whitespaces(data);
     data = skip_comments(data);
-    (Header {
+    Result::Ok((Header {
         magic_number: magic_number.to_owned(),
         width,
         heigth,
         max_color_value,
-    }, data)
+    }, data))
 }
 
 pub struct PPMReader {
@@ -127,15 +141,18 @@ impl PPMReader {
 impl ImageReader for PPMReader {
 
     fn read(&self, data: &Vec<u8>) -> Result<Image, ImageIOError> {
-        let (header, data) = read_header(data);
-        let raster_reader = get_raster_reader(header.magic_number.as_str());
-        Result::Ok(
-            Image {
-                width: header.width,
-                height: header.heigth,
-                pixels: raster_reader.read_raster(header, data),
-            }
-        )
+        let (header, data) = read_header(data).map_err(|err| ImageIOError::FailedToRead {
+            description: format!("Bad PPM image header: {}", err)
+        })?;
+        let width = header.width;
+        let height = header.heigth;
+        let pixels = get_raster_reader(header.magic_number.as_str())
+            .map_err(|err| ImageIOError::FailedToRead {
+                description: format!("Bad PPM format: {}", err)
+            })?.read_raster(header, data).map_err(|err| ImageIOError::FailedToRead {
+                description: format!("Can not read pixels data: {}", err)
+            })?;
+        Result::Ok(Image { width, height, pixels })
     }
 
 }

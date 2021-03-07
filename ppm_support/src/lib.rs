@@ -1,5 +1,7 @@
 #![feature(box_syntax)]
 
+extern crate custom_error;
+
 use core::{plugins::ImageFormatSupportPlugin, models::{ImageReader, ImageWriter}};
 
 use reader::PPMReader;

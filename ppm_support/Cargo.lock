@@ -112,6 +112,7 @@ name = "ppm_support"
 version = "0.1.0"
 dependencies = [
  "core",
+ "custom_error",
 ]
 
 [[package]]

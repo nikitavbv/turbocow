@@ -44,7 +44,6 @@ impl ImageWriter for PPMWriter {
 #[cfg(test)]
 mod tests {
     use core::models::Pixel;
-    use std::fs::write;
     use super::*;
 
     #[test]
@@ -66,9 +65,14 @@ mod tests {
             pixels
         };
         let writer = PPMWriter::new();
-        write(
-            "assets/result.ppm",
-            writer.write(&image).expect("Failed to write the image")
-        ).expect("Failed to save image to the file");
+        let data = writer.write(&image).expect("Failed to write test image");
+        assert_eq!(std::str::from_utf8(&data).unwrap(),
+"P3
+3
+3
+255
+21 45 78 29 1 78 48 45 224 
+97 45 64 158 45 19 42 45 0 
+129 45 234 248 40 129 176 45 2 ");
     }
 }

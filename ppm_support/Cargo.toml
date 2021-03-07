@@ -9,3 +9,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 core = { path = "../core" }
+custom_error = "1.8.0"
