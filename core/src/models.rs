@@ -3,7 +3,7 @@ pub type Pixel = (u8, u8, u8); // rgb
 pub struct Image {
     pub width: usize,
     pub height: usize,
-    pub pixels: Vec<Vec<Pixel>>, // each Vec<Pixel> is a row, i.e. pixels is a Vec of rows.
+    pub pixels: Vec<Pixel>, // each Vec<Pixel> is a row, i.e. pixels is a Vec of rows.
 }
 
 pub trait ImageReader {
