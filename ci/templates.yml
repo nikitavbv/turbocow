@@ -95,6 +95,9 @@
   image: $CI_REGISTRY_IMAGE/deploy_tools:0.1.20
   before_script:
     - gcloud auth activate-service-account --key-file $SERVICE_ACCOUNT_KEY
+  only:
+    refs:
+      - master
   
 .plugin_deploy:
   extends: .storage_upload
