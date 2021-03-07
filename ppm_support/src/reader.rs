@@ -74,16 +74,34 @@ fn skip_whitespaces(data: &[u8]) -> &[u8] {
     &data[i..]
 }
 
+fn skip_comments(data: &[u8]) -> &[u8] {
+    // 35 - #
+    // 10 - LF
+    if data[0] == 35 {
+        let mut i = 0;
+        while data[i] != 10 {
+            i += 1;
+        }
+        &data[(i+1)..]
+    } else {
+        data
+    }
+}
+
 fn read_header(mut data: &[u8]) -> (Header, &[u8]) {
     let magic_number = from_utf8(&data[0..2]).expect("Bad data for magic number in PPM header");
     data = &data[2..];
     data = skip_whitespaces(data);
+    data = skip_comments(data);
     let (width, data) = read_number(data);
     data = skip_whitespaces(data);
+    data = skip_comments(data);
     let (heigth, data) = read_number(data);
     data = skip_whitespaces(data);
+    data = skip_comments(data);
     let (max_color_value, data) = read_number(data);
     data = skip_whitespaces(data);
+    data = skip_comments(data);
     (Header {
         magic_number: magic_number.to_owned(),
         width,
