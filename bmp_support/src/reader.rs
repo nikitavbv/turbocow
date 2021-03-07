@@ -138,7 +138,7 @@ fn read_pixel_array(data: &[u8], width: i32, height: i32) -> Result<Image, BMPRe
 
     for y in 0..height {
         for x in 0..width {
-            let offset = ((y * width + x) * 3) as usize; // for bit bit
+            let offset = ((y * width + x) * 3) as usize;
             image.set_pixel_bottom_left_origin(x as usize, y as usize, Pixel::from_rgb(
                 data[offset + 2], 
                 data[offset + 1], 
