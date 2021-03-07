@@ -63,6 +63,8 @@ fn read_header(header: &[u8; 14]) -> Result<Header, BMPReaderError> {
     }
 
     // 2 - 4 bytes - size of BMP file in bytes
+    let _size_in_bytes = LittleEndian::read_u32(&header[2..6]);
+
     // 6 - 2 bytes - reserved
     // 8 - 2 bytes - reserved
     // 10 - 4 bytes - offset of the byte where the bitmap image datga (pixel array) can be found.
@@ -74,6 +76,11 @@ fn read_header(header: &[u8; 14]) -> Result<Header, BMPReaderError> {
 }
 
 fn read_dib_header(header: &[u8]) -> Result<DIBHeader, BMPReaderError> {
+    // types mapping:
+    // dword - u32
+    // long - i32
+    // word - u16
+
     // 0 - 4 bytes - size of this header
     let size_of_header = LittleEndian::read_u32(&header[0..4]);
 
@@ -126,6 +133,13 @@ fn read_dib_header(header: &[u8]) -> Result<DIBHeader, BMPReaderError> {
             description: format!("unknown compression type: {}", compression),
         })
     };
+    let _size_image = LittleEndian::read_u32(&header[20..24]); // looks like size of pixel array
+    let _xpels_per_meter = LittleEndian::read_i32(&header[24..28]);
+    let _ypel_per_meter = LittleEndian::read_i32(&header[28..32]);
+
+    let _clr_used = LittleEndian::read_u32(&header[32..36]);
+    let _crl_important = LittleEndian::read_u32(&header[36..40]);
+    let _red_mask = LittleEndian::read_u32(&header[40..44]);
 
     Ok(DIBHeader {
         width,
