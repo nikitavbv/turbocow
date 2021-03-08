@@ -1,5 +1,8 @@
 #![feature(box_syntax)]
+#![feature(destructuring_assignment)]
 
+#[macro_use] 
+extern crate log;
 extern crate custom_error;
 
 use core::{plugins::ImageFormatSupportPlugin, models::{ImageReader, ImageWriter}};
