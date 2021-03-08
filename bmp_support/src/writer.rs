@@ -66,17 +66,23 @@ fn write_dib_header(image: &Image) -> Vec<u8> {
 }
 
 fn write_pixel_array(image: &Image) -> Vec<u8> {
-    let mut pixel_array = vec![0 as u8; (image.width * image.height * 3) as usize];
+    let row_alignment = (image.width * 3) % 4;
+    let width_bytes = image.width * 3 + row_alignment;
+    let mut pixel_array = vec![0 as u8; (image.height * width_bytes) as usize];
 
+    let mut offset = 0;
     for y in 0..image.height {
         for x in 0..image.width {
-            let offset = ((y * image.width + x) * 3) as usize;
             let pixel = &image.get_pixel_bottom_left_origin(x, y);
             
             pixel_array[offset + 2] = pixel.red;
             pixel_array[offset + 1] = pixel.green;
             pixel_array[offset] = pixel.blue;
+
+            offset += 3;
         }
+        
+        offset += row_alignment;
     }
 
     pixel_array
@@ -100,6 +106,30 @@ mod tests {
             0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 229, 155, 
             3, 47, 47, 221, 255, 255, 255, 255, 255, 255, 229, 155, 3, 229, 155, 3, 255, 255, 255, 255, 
             255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255
+        ]);
+    }
+
+    #[test]
+    fn write_with_alignment() {
+        let test_image = Image::test_image();
+        let mut test_image_3x3 = Image::new(3, 3);
+        for y in 0..3 {
+            for x in 0..3 {
+                test_image_3x3.set_pixel(x, y, test_image.get_pixel(x, y));
+            }
+        }
+
+        let writer = BMPWriter::new();
+        let data = writer.write(&test_image).expect("failed to write test image");
+
+        assert_eq!(data, vec![
+            66, 77, 170, 0, 0, 0, 0, 0, 0, 0, 122, 0, 0, 0, 108, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 1, 0, 24, 
+            0, 0, 0, 0, 0, 48, 0, 0, 0, 35, 46, 0, 0, 35, 46, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 229, 155, 3, 47, 47, 
+            221, 255, 255, 255, 255, 255, 255, 229, 155, 3, 229, 155, 3, 255, 255, 255, 255, 255, 255, 255, 
+            255, 255, 255, 255, 255, 255, 255, 255
         ]);
     }
 }
