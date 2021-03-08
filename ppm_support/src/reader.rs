@@ -140,7 +140,7 @@ impl PPMReader {
 
 impl ImageReader for PPMReader {
 
-    fn read(&self, data: &Vec<u8>) -> Result<Image, ImageIOError> {
+    fn read(&self, data: &Vec<u8>) -> Result<Vec<Image>, ImageIOError> {
         let (header, data) = read_header(data).map_err(|err| ImageIOError::FailedToRead {
             description: format!("Bad PPM image header: {}", err)
         })?;
@@ -152,7 +152,7 @@ impl ImageReader for PPMReader {
             })?.read_raster(header, data).map_err(|err| ImageIOError::FailedToRead {
                 description: format!("Can not read pixels data: {}", err)
             })?;
-        Result::Ok(Image { width, height, pixels })
+        Result::Ok(vec![Image { width, height, pixels }])
     }
 
 }
@@ -163,11 +163,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn simple_test() {
+    fn test_simple() {
         let simple_ppm = read("assets/simple.ppm")
             .expect("Failed to load assets/simple.ppm");
         let reader = PPMReader::new();
-        let image = reader.read(&simple_ppm).expect("Failed to read the image");
+        let images = reader.read(&simple_ppm).expect("Failed to read the image");
+
+        assert_eq!(images.len(), 1);
+        let image = &images[0];
 
         assert_eq!(image.width, 4);
         assert_eq!(image.height, 4);
@@ -176,13 +179,15 @@ mod tests {
     }
 
     #[test]
-    fn test2() {
+    fn test_example1() {
         let simple_ppm = read("assets/example1.ppm")
             .expect("Failed to load assets/example1.ppm");
         let reader = PPMReader::new();
-        let image = reader.read(&simple_ppm).expect("Failed to read the image");
+        let images = reader.read(&simple_ppm).expect("Failed to read the image");
 
-        println!("{:?}", image.pixels);
+        assert_eq!(images.len(), 1);
+        let image = &images[0];
+
         assert_eq!(image.width, 4);
         assert_eq!(image.height, 4);
         assert_eq!(image.pixels.len(), 16);
