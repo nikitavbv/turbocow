@@ -1,0 +1,9 @@
+P3
+# example1.ppm
+# we can write more comments
+4 4 # width and heigth of the image
+511 # max color value 
+ 0  0  0    0  0  0    0  0  0   15  0 15
+ 0  0  0    0 400 7    0  0  0    0  0  0
+ 0  0  0    0  0  0    0 15  7    0  0  0
+15  0 400   0  0  0    0  0  0    0  0  1

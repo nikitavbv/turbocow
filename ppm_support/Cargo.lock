@@ -21,21 +21,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bmp_support"
-version = "0.1.0"
-dependencies = [
- "byteorder",
- "core",
- "custom_error",
-]
-
-[[package]]
-name = "byteorder"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae44d1a3d5a19df61dd0c8beb138458ac2a53a7ac09eba97d55592540004306b"
-
-[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -121,6 +106,14 @@ name = "once_cell"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10acf907b94fc1b1a152d08ef97e7759650268cf986bf127f387e602b02c7e5a"
+
+[[package]]
+name = "ppm_support"
+version = "0.1.0"
+dependencies = [
+ "core",
+ "custom_error",
+]
 
 [[package]]
 name = "regex"
