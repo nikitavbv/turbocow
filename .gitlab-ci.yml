@@ -10,5 +10,6 @@ include:
   - local: 'ci/templates.yml'
   - local: 'ci/images.yml'
   - local: 'ci/bmp_support.yml'
+  - local: 'ci/gif_support.yml'
   - local: 'ci/core.yml'
   - local: 'ci/converter.yml'

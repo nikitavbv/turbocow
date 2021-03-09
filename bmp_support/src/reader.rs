@@ -37,7 +37,7 @@ impl BMPReader {
 impl ImageReader for BMPReader {
 
 
-    fn read(&self, data: &Vec<u8>) -> Result<Image, ImageIOError> {
+    fn read(&self, data: &Vec<u8>) -> Result<Vec<Image>, ImageIOError> {
         let header = read_header(&data[0..14].try_into().map_err(|err| ImageIOError::FailedToRead {
             description: format!("expected to get 14 bytes for header: {}", err),
         })?).map_err(|err| ImageIOError::FailedToRead {
@@ -51,6 +51,7 @@ impl ImageReader for BMPReader {
             .map_err(|err| ImageIOError::FailedToRead {
                 description: format!("failed to read as bmp: {}", err),
             })
+            .map(|v| vec![v])
     }
 }
 
@@ -176,7 +177,10 @@ mod tests {
             .expect("failed to read test asset");
         
         let reader = BMPReader::new();
-        let image = reader.read(&frankfurt).expect("failed to read test image");
+        let images = reader.read(&frankfurt).expect("failed to read test image");
+
+        assert_eq!(images.len(), 1);
+        let image = &images[0];
 
         assert_eq!(image.width, 1920);
         assert_eq!(image.height, 1289);

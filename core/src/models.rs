@@ -89,7 +89,7 @@ custom_error! {pub ImageIOError
 
 pub trait ImageReader {
 
-    fn read(&self, data: &Vec<u8>) -> Result<Image, ImageIOError>;
+    fn read(&self, data: &Vec<u8>) -> Result<Vec<Image>, ImageIOError>;
 }
 
 pub trait ImageWriter {

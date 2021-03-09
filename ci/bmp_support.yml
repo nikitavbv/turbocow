@@ -26,10 +26,10 @@ bmp support deploy:
   extends:
     - .plugin_deploy
     - .bmp_support
-  needs: ['bmp support build']
+  needs: ['bmp support build', 'bmp support test']
 
 bmp support deploy windows:
   extends:
     - .plugin_deploy_windows
     - .bmp_support
-  needs: ['bmp support build windows']
+  needs: ['bmp support build windows', 'bmp support test']

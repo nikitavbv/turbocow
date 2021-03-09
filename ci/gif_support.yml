@@ -1,0 +1,35 @@
+.gif_support:
+  variables:
+    CRATE_NAME: gif_support
+  only:
+    changes:
+      - gif_support/**/*
+      - ci/gif_support.yml
+      - ci/templates.yml
+
+gif support test:
+  extends: 
+    - .cargo_test
+    - .gif_support
+
+gif support build:
+  extends: 
+    - .cargo_build_lib
+    - .gif_support
+
+gif support build windows:
+  extends: 
+    - .cargo_build_lib_windows
+    - .gif_support
+
+gif support deploy:
+  extends:
+    - .plugin_deploy
+    - .gif_support
+  needs: ['bmp support build', 'gif support test']
+
+gif support deploy windows:
+  extends:
+    - .plugin_deploy_windows
+    - .gif_support
+  needs: ['bmp support build windows', 'gif support test']
