@@ -1,4 +1,4 @@
-use core::models::{Image, ImageIOError, ImageWriter};
+use core::models::{Image, ImageIOError, ImageWriter, Pixel};
 
 use byteorder::{LittleEndian, ByteOrder};
 pub struct BMPWriter {
@@ -15,6 +15,8 @@ impl BMPWriter {
 impl ImageWriter for BMPWriter {
     
     fn write(&self, image: &Image) -> Result<Vec<u8>, ImageIOError> {
+        let image = image.compose_alpha_over_background(Pixel::black());
+
         let mut output = vec![];
 
         let mut dib_header = write_dib_header(&image);

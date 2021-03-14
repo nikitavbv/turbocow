@@ -5,24 +5,44 @@ pub struct Pixel {
     pub red: u8,
     pub green: u8,
     pub blue: u8,
+    pub alpha: u8,
 }
 
 impl Pixel {
 
     pub fn zero() -> Self {
-        Pixel {
-            red: 0,
-            green: 0,
-            blue: 0,
-        }
+        Self::black()
+    }
+
+    pub fn white() -> Self {
+        Self::from_rgb(255, 255, 255)
+    }
+
+    pub fn black() -> Self {
+        Self::from_rgb(0, 0, 0)
     }
 
     pub fn from_rgb(red: u8, green: u8, blue: u8) -> Self {
+        Self::from_rgba(red, green, blue, 255)
+    }
+
+    pub fn from_rgba(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
         Pixel {
             red,
             green,
             blue,
+            alpha,
         }
+    }
+
+    pub fn compose_alpha_over_background(&self, background: &Pixel) -> Self {
+        let foreground_multiplier = self.alpha as f32 / 255.0;
+        let background_multiplier = (255 - self.alpha) as f32 / 255.0;
+        Self::from_rgb(
+            (self.red as f32 * foreground_multiplier + background.red as f32 * background_multiplier) as u8,
+            (self.green as f32 * foreground_multiplier + background.green as f32 * background_multiplier) as u8,
+            (self.blue as f32 * foreground_multiplier + background.blue as f32 * background_multiplier) as u8,
+        )
     }
 }
 
@@ -80,6 +100,18 @@ impl Image {
                 self.set_pixel(x, y, color.clone());
             } 
         }
+    }
+
+    pub fn compose_alpha_over_background(&self, background: Pixel) -> Self {
+        let mut image = Self::new(self.width, self.height);
+
+        for y in 0..self.height {
+            for x in 0..self.width {
+                image.set_pixel(x, y, self.get_pixel(x, y).compose_alpha_over_background(&background))
+            }
+        }
+
+        image
     }
 }
 

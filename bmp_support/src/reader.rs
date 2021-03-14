@@ -29,6 +29,7 @@ struct DIBHeader {
     red_mask: u32,
     green_mask: u32,
     blue_mask: u32,
+    alpha_mask: u32,
 }
 
 #[derive(Debug)]
@@ -107,7 +108,7 @@ fn read_dib_header(header: &[u8]) -> Result<DIBHeader, BMPReaderError> {
     let _planes = LittleEndian::read_u16(&header[12..14]);
     let bit_count = LittleEndian::read_u16(&header[14..16]);
 
-    if bit_count != 24 && bit_count != 16 {
+    if bit_count != 32 && bit_count != 24 && bit_count != 16 {
         return Err(BMPReaderError::NotImplemented {
             description: format!("this image uses {} bits", bit_count),
         });
@@ -151,6 +152,7 @@ fn read_dib_header(header: &[u8]) -> Result<DIBHeader, BMPReaderError> {
     let red_mask = LittleEndian::read_u32(&header[40..44]);
     let green_mask = LittleEndian::read_u32(&header[44..48]);
     let blue_mask = LittleEndian::read_u32(&header[48..52]);
+    let alpha_mask = LittleEndian::read_u32(&header[52..56]);
 
     Ok(DIBHeader {
         width,
@@ -162,6 +164,7 @@ fn read_dib_header(header: &[u8]) -> Result<DIBHeader, BMPReaderError> {
         red_mask,
         green_mask,
         blue_mask,
+        alpha_mask,
     })
 }
 
@@ -185,10 +188,14 @@ fn read_pixel_array_bitfields(data: &[u8], dib_header: &DIBHeader) -> Result<Ima
     let blue_mask_shift = offset_to_far_right(dib_header.blue_mask).ok_or(BMPReaderError::InvalidDIBHeader {
         description: format!("Could not determine shift for blue mask: {}", dib_header.blue_mask),
     })?;
+    let alpha_mask_shift = offset_to_far_right(dib_header.alpha_mask).ok_or(BMPReaderError::InvalidDIBHeader {
+        description: format!("Could not determine shift for alpha mask: {}", dib_header.alpha_mask),
+    })?;
 
     let red_channel_multiplier = 255 / (dib_header.red_mask >> red_mask_shift) as u8;
     let green_channel_multiplier = 255 / (dib_header.green_mask >> green_mask_shift) as u8;
     let blue_mask_multiplier = 255 / (dib_header.blue_mask >> blue_mask_shift) as u8;
+    let alpha_mask_multiplier = 255 / (dib_header.alpha_mask >> alpha_mask_shift) as u8;
 
     for y in 0..dib_header.height {
         for x in 0..dib_header.width {
@@ -205,10 +212,11 @@ fn read_pixel_array_bitfields(data: &[u8], dib_header: &DIBHeader) -> Result<Ima
                 pixel = pixel | ((data[offset + n as usize] as u32).checked_shl(8 * n as u32).unwrap());
             }
 
-            let pixel = Pixel::from_rgb(
+            let pixel = Pixel::from_rgba(
                 ((pixel & dib_header.red_mask) >> red_mask_shift) as u8 * red_channel_multiplier,
                 ((pixel & dib_header.green_mask) >> green_mask_shift) as u8 * green_channel_multiplier,
                 ((pixel & dib_header.blue_mask) >> blue_mask_shift) as u8 * blue_mask_multiplier,
+                ((pixel & dib_header.alpha_mask) >> alpha_mask_shift) as u8 * alpha_mask_multiplier,
             );
 
             image.set_pixel_bottom_left_origin(x as usize, y as usize, pixel);
@@ -303,5 +311,26 @@ mod tests {
         assert_eq!(image.get_pixel(1919, 0), Pixel::from_rgb(176, 176, 176));
         assert_eq!(image.get_pixel(1919, 1284), Pixel::from_rgb(104, 96, 88));
         assert_eq!(image.get_pixel(0, 1284), Pixel::from_rgb(128, 60, 0));
+    }
+
+    #[test]
+    fn test_read_32_bit_transparent() {
+        let lightsaber = read("assets/lightsaber.bmp")
+            .expect("failed to read test asset");
+
+        let reader = BMPReader::new();
+        let images = reader.read(&lightsaber).expect("failed to read test image");
+
+        assert_eq!(images.len(), 1);
+        let image = &images[0];
+
+        assert_eq!(image.width, 1920);
+        assert_eq!(image.height, 507);
+
+        assert_eq!(image.get_pixel(0, 0), Pixel::from_rgba(0, 0, 0, 0));
+        assert_eq!(image.get_pixel(1919, 0), Pixel::from_rgba(0, 0, 0, 0));
+        assert_eq!(image.get_pixel(1919, 506), Pixel::from_rgba(0, 0, 0, 0));
+        assert_eq!(image.get_pixel(0, 506), Pixel::from_rgba(0, 0, 0, 0));
+        assert_eq!(image.get_pixel(1150, 180), Pixel::from_rgba(0, 114, 255, 58));
     }
 }
