@@ -26,10 +26,10 @@ gif support deploy:
   extends:
     - .plugin_deploy
     - .gif_support
-  needs: ['bmp support build', 'gif support test']
+  needs: ['gif support build', 'gif support test']
 
 gif support deploy windows:
   extends:
     - .plugin_deploy_windows
     - .gif_support
-  needs: ['bmp support build windows', 'gif support test']
+  needs: ['gif support build windows', 'gif support test']
