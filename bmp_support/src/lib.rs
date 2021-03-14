@@ -2,11 +2,12 @@
 
 extern crate custom_error;
 
-use core::{plugins::ImageFormatSupportPlugin, models::{ImageReader, ImageWriter}};
+use core::{plugins::ImageFormatSupportPlugin, models::io::{ImageReader, ImageWriter}};
 
 use reader::BMPReader;
 use writer::BMPWriter;
 
+mod common;
 pub mod reader;
 pub mod writer;
 

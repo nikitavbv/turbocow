@@ -2,7 +2,7 @@ use byteorder::{LittleEndian, ByteOrder};
 use custom_error::custom_error;
 use bit_vec::BitVec;
 
-use core::models::{Image, ImageIOError, ImageReader, Pixel};
+use core::models::{image::Image, io::{ImageIOError, ImageReader}, pixel::Pixel};
 
 // see:
 // https://www.fileformat.info/format/gif/egff.htm
@@ -419,7 +419,7 @@ fn bit_vec_for_source_bytes(data: &[u8]) -> BitVec {
 
 #[cfg(test)]
 mod tests {
-    use core::models::Pixel;
+    use core::models::pixel::Pixel;
     use std::fs::read;
 
     use super::*;

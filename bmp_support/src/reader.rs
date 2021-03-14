@@ -3,11 +3,14 @@ use std::convert::TryInto;
 use custom_error::custom_error;
 use byteorder::{ByteOrder, LittleEndian};
 
-use core::models::{Image, ImageIOError, ImageReader, Pixel};
+use core::models::{image::Image, io::{ImageIOError, ImageReader}, pixel::Pixel};
+
+use crate::common::{Compression, DIBHeader, offset_to_far_right};
 
 custom_error! {pub BMPReaderError
     InvalidHeader {description: String} = "Invalid header: {description}",
     InvalidDIBHeader {description: String} = "Invalid DIB header: {description}",
+    UnexpectedConfiguration {description: String} = "Unexpected configuration: {description}",
     NotImplemented {description: String} = "Not implemented: {description}"
 }
 
@@ -16,15 +19,6 @@ pub struct BMPReader {
 
 struct Header {
     offset: u32,
-}
-
-struct DIBHeader {
-    width: i32,
-    height: i32,
-}
-
-enum Compression {
-    Uncompressed,
 }
 
 impl BMPReader {
@@ -47,7 +41,7 @@ impl ImageReader for BMPReader {
             description: format!("failed to read dib header: {}", err)
         })?;
 
-        read_pixel_array(&data[header.offset as usize..], dib_header.width, dib_header.height)
+        read_pixel_array(&data[header.offset as usize..], &dib_header)
             .map_err(|err| ImageIOError::FailedToRead {
                 description: format!("failed to read as bmp: {}", err),
             })
@@ -85,9 +79,9 @@ fn read_dib_header(header: &[u8]) -> Result<DIBHeader, BMPReaderError> {
     // 0 - 4 bytes - size of this header
     let size_of_header = LittleEndian::read_u32(&header[0..4]);
 
-    if size_of_header != 108 {
+    if size_of_header != 108 && size_of_header != 124 {
         return Err(BMPReaderError::InvalidDIBHeader {
-            description: format!("Unexpected length of DIB header: {}", size_of_header),
+            description: format!("Unexpected length of DIB header: {} (only BMPv4 and BMPv5 are supported)", size_of_header),
         });
     }
 
@@ -97,23 +91,20 @@ fn read_dib_header(header: &[u8]) -> Result<DIBHeader, BMPReaderError> {
     let _planes = LittleEndian::read_u16(&header[12..14]);
     let bit_count = LittleEndian::read_u16(&header[14..16]);
 
-    if bit_count != 24 {
+    if bit_count != 32 && bit_count != 24 && bit_count != 16 {
         return Err(BMPReaderError::NotImplemented {
             description: format!("this image uses {} bits", bit_count),
         });
     }
 
-    let compression = LittleEndian::read_u32(&header[16..20]);
-    let _compression = match compression {
+    let compression = match LittleEndian::read_u32(&header[16..20]) {
         0x0000 => Compression::Uncompressed,
+        0x0003 => Compression::Bitfields,
         0x0001 => return Err(BMPReaderError::NotImplemented {
             description: "v4 RLE8".to_string(),
         }),
         0x0002 => return Err(BMPReaderError::NotImplemented {
             description: "v4 RLE4".to_string(),
-        }),
-        0x0003 => return Err(BMPReaderError::NotImplemented {
-            description: "v4 bitfields".to_string(),
         }),
         0x0004 => return Err(BMPReaderError::NotImplemented {
             description: "v4 JPEG".to_string(),
@@ -140,20 +131,108 @@ fn read_dib_header(header: &[u8]) -> Result<DIBHeader, BMPReaderError> {
 
     let _clr_used = LittleEndian::read_u32(&header[32..36]);
     let _crl_important = LittleEndian::read_u32(&header[36..40]);
-    let _red_mask = LittleEndian::read_u32(&header[40..44]);
+    
+    let red_mask = LittleEndian::read_u32(&header[40..44]);
+    let green_mask = LittleEndian::read_u32(&header[44..48]);
+    let blue_mask = LittleEndian::read_u32(&header[48..52]);
+    let alpha_mask = LittleEndian::read_u32(&header[52..56]);
 
     Ok(DIBHeader {
         width,
         height,
+        bit_count,
+
+        compression,
+
+        red_mask,
+        green_mask,
+        blue_mask,
+        alpha_mask,
     })
 }
 
-fn read_pixel_array(data: &[u8], width: i32, height: i32) -> Result<Image, BMPReaderError> {
-    let mut image = Image::new(width as usize, height as usize);
+fn read_pixel_array(data: &[u8], dib_header: &DIBHeader) -> Result<Image, BMPReaderError> {
+    match dib_header.compression {
+        Compression::Uncompressed => read_pixel_array_uncompressed(&data, &dib_header),
+        Compression::Bitfields => read_pixel_array_bitfields(&data, &dib_header),
+    }
+}
 
-    for y in 0..height {
-        for x in 0..width {
-            let offset = ((y * width + x) * 3) as usize;
+fn read_pixel_array_bitfields(data: &[u8], dib_header: &DIBHeader) -> Result<Image, BMPReaderError> {
+    let mut image = Image::new(dib_header.width as usize, dib_header.height as usize);
+    let bytes_per_pixel = dib_header.bit_count / 8;
+
+    let red_mask_shift = offset_to_far_right(dib_header.red_mask).ok_or(BMPReaderError::InvalidDIBHeader {
+        description: format!("Could not determine shift for red mask: {}", dib_header.red_mask),
+    })?;
+    let green_mask_shift = offset_to_far_right(dib_header.green_mask).ok_or(BMPReaderError::InvalidDIBHeader {
+        description: format!("Could not determine shift for green mask: {}", dib_header.green_mask),
+    })?;
+    let blue_mask_shift = offset_to_far_right(dib_header.blue_mask).ok_or(BMPReaderError::InvalidDIBHeader {
+        description: format!("Could not determine shift for blue mask: {}", dib_header.blue_mask),
+    })?;
+    let alpha_mask_shift = if dib_header.alpha_mask != 0 {
+        Some(offset_to_far_right(dib_header.alpha_mask).ok_or(BMPReaderError::InvalidDIBHeader {
+            description: format!("Could not determine shift for alpha mask: {}", dib_header.alpha_mask),
+        })?)
+    } else {
+        None
+    };
+
+    let red_channel_multiplier = 255 / (dib_header.red_mask >> red_mask_shift) as u8;
+    let green_channel_multiplier = 255 / (dib_header.green_mask >> green_mask_shift) as u8;
+    let blue_mask_multiplier = 255 / (dib_header.blue_mask >> blue_mask_shift) as u8;
+    let alpha_mask_multiplier = alpha_mask_shift.map(|v| 255 / (dib_header.alpha_mask >> v) as u8);
+
+    for y in 0..dib_header.height {
+        for x in 0..dib_header.width {
+            let offset = ((y * dib_header.width + x) * bytes_per_pixel as i32) as usize;
+
+            let mut pixel_bits: u32 = 0;
+            if bytes_per_pixel > 4 {
+                return Err(BMPReaderError::UnexpectedConfiguration {
+                    description: format!("Too many bytes per pixel: {}", bytes_per_pixel),
+                });
+            }
+
+            for n in 0..bytes_per_pixel {
+                pixel_bits = pixel_bits | (
+                    (data[offset + n as usize] as u32).checked_shl(8 * n as u32)
+                        .expect("Expected shift left not to overflow, because there should not be more than 32 bits")
+                );
+            }
+
+            let pixel = Pixel::from_rgb(
+                ((pixel_bits & dib_header.red_mask) >> red_mask_shift) as u8 * red_channel_multiplier, 
+                ((pixel_bits & dib_header.green_mask) >> green_mask_shift) as u8 * green_channel_multiplier,
+                ((pixel_bits & dib_header.blue_mask) >> blue_mask_shift) as u8 * blue_mask_multiplier
+            );
+
+            let pixel = alpha_mask_shift.map(|shift| pixel.with_alpha_channel( 
+            ((pixel_bits & dib_header.alpha_mask) >> shift) as u8 * alpha_mask_multiplier
+                    .expect("Expected alpha mask multiplier to be present because alpha mask shift is present"),
+            )).unwrap_or(pixel);
+            
+            image.set_pixel_bottom_left_origin(x as usize, y as usize, pixel);
+        }
+    }
+
+    Ok(image)
+}
+
+fn read_pixel_array_uncompressed(data: &[u8], dib_header: &DIBHeader) -> Result<Image, BMPReaderError> {
+    let mut image = Image::new(dib_header.width as usize, dib_header.height as usize);
+    let bytes_per_pixel = dib_header.bit_count / 8;
+    if dib_header.bit_count != 24 {
+        return Err(BMPReaderError::UnexpectedConfiguration {
+            description: "Expected no compression to be used with 24-bit images only".to_string(),
+        });
+    }
+
+    for y in 0..dib_header.height {
+        for x in 0..dib_header.width {
+            let offset = ((y * dib_header.width + x) * bytes_per_pixel as i32) as usize;
+
             image.set_pixel_bottom_left_origin(x as usize, y as usize, Pixel::from_rgb(
                 data[offset + 2], 
                 data[offset + 1], 
@@ -189,5 +268,46 @@ mod tests {
         assert_eq!(image.get_pixel(1919, 0), Pixel::from_rgb(50, 28, 75));
         assert_eq!(image.get_pixel(1919, 1288), Pixel::from_rgb(40, 25, 56));
         assert_eq!(image.get_pixel(0, 1288), Pixel::from_rgb(16, 40, 110));
+    }
+
+    #[test]
+    fn test_read_16_bit() {
+        let cat = read("assets/cat.bmp")
+            .expect("failed to read test asset");
+
+        let reader = BMPReader::new();
+        let images = reader.read(&cat).expect("failed to read test image");
+
+        assert_eq!(images.len(), 1);
+        let image = &images[0];
+
+        assert_eq!(image.width, 1920);
+        assert_eq!(image.height, 1285);
+
+        assert_eq!(image.get_pixel(0, 0), Pixel::from_rgb(224, 236, 240));
+        assert_eq!(image.get_pixel(1919, 0), Pixel::from_rgb(176, 176, 176));
+        assert_eq!(image.get_pixel(1919, 1284), Pixel::from_rgb(104, 96, 88));
+        assert_eq!(image.get_pixel(0, 1284), Pixel::from_rgb(128, 60, 0));
+    }
+
+    #[test]
+    fn test_read_32_bit_transparent() {
+        let lightsaber = read("assets/lightsaber.bmp")
+            .expect("failed to read test asset");
+
+        let reader = BMPReader::new();
+        let images = reader.read(&lightsaber).expect("failed to read test image");
+
+        assert_eq!(images.len(), 1);
+        let image = &images[0];
+
+        assert_eq!(image.width, 1920);
+        assert_eq!(image.height, 507);
+
+        assert_eq!(image.get_pixel(0, 0), Pixel::from_rgba(0, 0, 0, 0));
+        assert_eq!(image.get_pixel(1919, 0), Pixel::from_rgba(0, 0, 0, 0));
+        assert_eq!(image.get_pixel(1919, 506), Pixel::from_rgba(0, 0, 0, 0));
+        assert_eq!(image.get_pixel(0, 506), Pixel::from_rgba(0, 0, 0, 0));
+        assert_eq!(image.get_pixel(1150, 180), Pixel::from_rgba(0, 114, 255, 58));
     }
 }
