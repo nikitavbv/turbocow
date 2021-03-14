@@ -1,4 +1,4 @@
-use core::models::ImageWriter;
+use core::models::{image::Image, io::{ImageIOError, ImageWriter, ImageWriterOptions}};
 
 pub struct GIFWriter {
 }
@@ -13,7 +13,7 @@ impl GIFWriter {
 
 impl ImageWriter for GIFWriter {
     
-    fn write(&self, image: &core::models::Image) -> Result<Vec<u8>, core::models::ImageIOError> {
+    fn write(&self, _image: &Image, _options: &ImageWriterOptions) -> Result<Vec<u8>, ImageIOError> {
         todo!()
     }
 }

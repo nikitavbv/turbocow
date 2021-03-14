@@ -3,7 +3,9 @@ use std::convert::TryInto;
 use custom_error::custom_error;
 use byteorder::{ByteOrder, LittleEndian};
 
-use core::models::{Image, ImageIOError, ImageReader, Pixel};
+use core::models::{image::Image, io::{ImageIOError, ImageReader}, pixel::Pixel};
+
+use crate::common::{Compression, DIBHeader, offset_to_far_right};
 
 custom_error! {pub BMPReaderError
     InvalidHeader {description: String} = "Invalid header: {description}",
@@ -17,25 +19,6 @@ pub struct BMPReader {
 
 struct Header {
     offset: u32,
-}
-
-struct DIBHeader {
-    width: i32,
-    height: i32,
-    bit_count: u16,
-
-    compression: Compression,
-
-    red_mask: u32,
-    green_mask: u32,
-    blue_mask: u32,
-    alpha_mask: u32,
-}
-
-#[derive(Debug)]
-enum Compression {
-    Uncompressed,
-    Bitfields,
 }
 
 impl BMPReader {
@@ -188,20 +171,24 @@ fn read_pixel_array_bitfields(data: &[u8], dib_header: &DIBHeader) -> Result<Ima
     let blue_mask_shift = offset_to_far_right(dib_header.blue_mask).ok_or(BMPReaderError::InvalidDIBHeader {
         description: format!("Could not determine shift for blue mask: {}", dib_header.blue_mask),
     })?;
-    let alpha_mask_shift = offset_to_far_right(dib_header.alpha_mask).ok_or(BMPReaderError::InvalidDIBHeader {
-        description: format!("Could not determine shift for alpha mask: {}", dib_header.alpha_mask),
-    })?;
+    let alpha_mask_shift = if dib_header.alpha_mask != 0 {
+        Some(offset_to_far_right(dib_header.alpha_mask).ok_or(BMPReaderError::InvalidDIBHeader {
+            description: format!("Could not determine shift for alpha mask: {}", dib_header.alpha_mask),
+        })?)
+    } else {
+        None
+    };
 
     let red_channel_multiplier = 255 / (dib_header.red_mask >> red_mask_shift) as u8;
     let green_channel_multiplier = 255 / (dib_header.green_mask >> green_mask_shift) as u8;
     let blue_mask_multiplier = 255 / (dib_header.blue_mask >> blue_mask_shift) as u8;
-    let alpha_mask_multiplier = 255 / (dib_header.alpha_mask >> alpha_mask_shift) as u8;
+    let alpha_mask_multiplier = alpha_mask_shift.map(|v| 255 / (dib_header.alpha_mask >> v) as u8);
 
     for y in 0..dib_header.height {
         for x in 0..dib_header.width {
             let offset = ((y * dib_header.width + x) * bytes_per_pixel as i32) as usize;
 
-            let mut pixel: u32 = 0;
+            let mut pixel_bits: u32 = 0;
             if bytes_per_pixel > 4 {
                 return Err(BMPReaderError::UnexpectedConfiguration {
                     description: format!("Too many bytes per pixel: {}", bytes_per_pixel),
@@ -209,16 +196,23 @@ fn read_pixel_array_bitfields(data: &[u8], dib_header: &DIBHeader) -> Result<Ima
             }
 
             for n in 0..bytes_per_pixel {
-                pixel = pixel | ((data[offset + n as usize] as u32).checked_shl(8 * n as u32).unwrap());
+                pixel_bits = pixel_bits | (
+                    (data[offset + n as usize] as u32).checked_shl(8 * n as u32)
+                        .expect("Expected shift left not to overflow, because there should not be more than 32 bits")
+                );
             }
 
-            let pixel = Pixel::from_rgba(
-                ((pixel & dib_header.red_mask) >> red_mask_shift) as u8 * red_channel_multiplier,
-                ((pixel & dib_header.green_mask) >> green_mask_shift) as u8 * green_channel_multiplier,
-                ((pixel & dib_header.blue_mask) >> blue_mask_shift) as u8 * blue_mask_multiplier,
-                ((pixel & dib_header.alpha_mask) >> alpha_mask_shift) as u8 * alpha_mask_multiplier,
+            let pixel = Pixel::from_rgb(
+                ((pixel_bits & dib_header.red_mask) >> red_mask_shift) as u8 * red_channel_multiplier, 
+                ((pixel_bits & dib_header.green_mask) >> green_mask_shift) as u8 * green_channel_multiplier,
+                ((pixel_bits & dib_header.blue_mask) >> blue_mask_shift) as u8 * blue_mask_multiplier
             );
 
+            let pixel = alpha_mask_shift.map(|shift| pixel.with_alpha_channel( 
+            ((pixel_bits & dib_header.alpha_mask) >> shift) as u8 * alpha_mask_multiplier
+                    .expect("Expected alpha mask multiplier to be present because alpha mask shift is present"),
+            )).unwrap_or(pixel);
+            
             image.set_pixel_bottom_left_origin(x as usize, y as usize, pixel);
         }
     }
@@ -248,23 +242,6 @@ fn read_pixel_array_uncompressed(data: &[u8], dib_header: &DIBHeader) -> Result<
     }
 
     Ok(image)
-}
-
-// 0b1111100000000000 -> 0b11111
-fn offset_to_far_right(v: u32) -> Option<u8> {
-    if v == 0 {
-        return None;
-    }
-
-    let mut v = v;
-    let mut total_shifts = 0;
-
-    while v & 0b1 != 1 {
-        v = v >> 1;
-        total_shifts += 1;
-    }
-
-    Some(total_shifts)
 }
 
 #[cfg(test)]

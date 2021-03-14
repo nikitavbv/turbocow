@@ -5,7 +5,7 @@ use custom_error::custom_error;
 use libloading::{Library, Symbol};
 use log::*;
 
-use crate::models::{ImageReader, ImageWriter};
+use crate::models::io::{ImageReader, ImageWriter};
 
 custom_error! {pub PluginManagerError
     FailedToLoadLibrary{description: String} = "Failed to load library: {description}",

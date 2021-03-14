@@ -1,51 +1,6 @@
-use custom_error::custom_error;
+use super::pixel::Pixel;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Pixel {
-    pub red: u8,
-    pub green: u8,
-    pub blue: u8,
-    pub alpha: u8,
-}
-
-impl Pixel {
-
-    pub fn zero() -> Self {
-        Self::black()
-    }
-
-    pub fn white() -> Self {
-        Self::from_rgb(255, 255, 255)
-    }
-
-    pub fn black() -> Self {
-        Self::from_rgb(0, 0, 0)
-    }
-
-    pub fn from_rgb(red: u8, green: u8, blue: u8) -> Self {
-        Self::from_rgba(red, green, blue, 255)
-    }
-
-    pub fn from_rgba(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
-        Pixel {
-            red,
-            green,
-            blue,
-            alpha,
-        }
-    }
-
-    pub fn compose_alpha_over_background(&self, background: &Pixel) -> Self {
-        let foreground_multiplier = self.alpha as f32 / 255.0;
-        let background_multiplier = (255 - self.alpha) as f32 / 255.0;
-        Self::from_rgb(
-            (self.red as f32 * foreground_multiplier + background.red as f32 * background_multiplier) as u8,
-            (self.green as f32 * foreground_multiplier + background.green as f32 * background_multiplier) as u8,
-            (self.blue as f32 * foreground_multiplier + background.blue as f32 * background_multiplier) as u8,
-        )
-    }
-}
-
+#[derive(Clone)]
 pub struct Image {
     pub width: usize,
     pub height: usize,
@@ -78,6 +33,20 @@ impl Image {
         image
     }
 
+    pub fn test_image_with_alpha() -> Self {
+        let mut image = Self::new(4, 4);
+
+        let transparent = Pixel::from_rgba(255, 255, 255, 0);
+
+        image.fill(transparent);
+        image.set_pixel(1, 1, Pixel::from_rgba(3, 155, 229, 255));
+        image.set_pixel(2, 1, Pixel::from_rgba(3, 155, 229, 150));
+        image.set_pixel(1, 2, Pixel::from_rgba(3, 155, 229, 100));
+        image.set_pixel(2, 2, Pixel::from_rgba(3, 155, 229, 50));
+
+        image
+    }
+
     pub fn set_pixel(&mut self, x: usize, y: usize, pixel: Pixel) {
         self.pixels[y * self.width + x] = pixel;
     }
@@ -102,7 +71,7 @@ impl Image {
         }
     }
 
-    pub fn compose_alpha_over_background(&self, background: Pixel) -> Self {
+    pub fn compose_alpha_over_background(&self, background: &Pixel) -> Self {
         let mut image = Self::new(self.width, self.height);
 
         for y in 0..self.height {
@@ -113,18 +82,4 @@ impl Image {
 
         image
     }
-}
-
-custom_error! {pub ImageIOError
-    FailedToRead {description: String} = "Failed to read image: {description}",
-}
-
-pub trait ImageReader {
-
-    fn read(&self, data: &Vec<u8>) -> Result<Vec<Image>, ImageIOError>;
-}
-
-pub trait ImageWriter {
-
-    fn write(&self, image: &Image) -> Result<Vec<u8>, ImageIOError>;
 }

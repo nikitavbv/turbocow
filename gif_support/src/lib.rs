@@ -5,7 +5,7 @@
 extern crate log;
 extern crate custom_error;
 
-use core::{plugins::ImageFormatSupportPlugin, models::{ImageReader, ImageWriter}};
+use core::{plugins::ImageFormatSupportPlugin, models::io::{ImageReader, ImageWriter}};
 
 use reader::GIFReader;
 use writer::GIFWriter;

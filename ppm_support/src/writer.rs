@@ -1,4 +1,4 @@
-use core::models::{ImageWriter, Image, ImageIOError};
+use core::models::{image::Image, io::ImageIOError, io::{ImageWriter, ImageWriterOptions}};
 pub struct PPMWriter {
 }
 
@@ -10,7 +10,7 @@ impl PPMWriter {
 
 impl ImageWriter for PPMWriter {
     
-    fn write(&self, image: &Image) -> Result<Vec<u8>, ImageIOError> {
+    fn write(&self, image: &Image, _options: &ImageWriterOptions) -> Result<Vec<u8>, ImageIOError> {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(b"P3");
         // 10 - LF
@@ -43,7 +43,7 @@ impl ImageWriter for PPMWriter {
 
 #[cfg(test)]
 mod tests {
-    use core::models::Pixel;
+    use core::models::pixel::Pixel;
     use super::*;
 
     #[test]
@@ -65,7 +65,8 @@ mod tests {
             pixels
         };
         let writer = PPMWriter::new();
-        let data = writer.write(&image).expect("Failed to write test image");
+        let data = writer.write(&image, &ImageWriterOptions::default())
+            .expect("Failed to write test image");
         assert_eq!(std::str::from_utf8(&data).unwrap(),
 "P3
 3
