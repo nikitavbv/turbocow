@@ -10,6 +10,7 @@ use core::{plugins::ImageFormatSupportPlugin, models::{ImageReader, ImageWriter}
 use reader::GIFReader;
 use writer::GIFWriter;
 
+mod clustering;
 pub mod reader;
 pub mod writer;
 
