@@ -1,7 +1,7 @@
 use rand_distr::{Distribution, Normal};
 
-use core::models::{Image, Pixel};
-use std::time::{Instant, Duration};
+use core::models::{image::Image, pixel::Pixel};
+use std::{collections::HashSet, time::{Instant, Duration}};
 
 // see https://www.kaggle.com/andyxie/k-means-clustering-implementation-in-python
 // see https://en.wikipedia.org/wiki/Color_difference
@@ -14,6 +14,15 @@ pub fn cluster(pixels: &Vec<Pixel>, total_clusters: usize, min_error: u32, min_i
     }
 
     let mut pixels: Vec<(u8, u8, u8)> = pixels.iter().map(|v| (v.red, v.green, v.blue)).collect();
+
+    let unique_pixels: HashSet<(u8, u8, u8)> = pixels.iter().map(|v| v.clone()).collect();
+    if unique_pixels.len() < total_clusters {
+        let mut pixels: Vec<(u8, u8, u8)> = unique_pixels.iter().map(|v| v.clone()).collect();
+        pixels.sort();
+
+        return pixels.iter().map(|v| Pixel::from_rgb(v.0, v.1, v.2)).collect();
+    }
+
     let pixels_f64: Vec<(f64, f64, f64)> = pixels.iter().map(|v| (v.0 as f64, v.1 as f64, v.2 as f64)).collect();
     pixels.sort();
 
@@ -213,7 +222,7 @@ fn pixel_add(a: (f64, f64, f64), b: (f64, f64, f64)) -> (f64, f64, f64) {
 
 #[cfg(test)]
 mod tests {
-    use core::models::ImageReader;
+    use core::models::io::ImageReader;
     use std::fs::read;
 
     use crate::reader::GIFReader;
