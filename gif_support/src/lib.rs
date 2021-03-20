@@ -11,6 +11,7 @@ use reader::GIFReader;
 use writer::GIFWriter;
 
 mod clustering;
+mod common;
 pub mod reader;
 pub mod writer;
 
