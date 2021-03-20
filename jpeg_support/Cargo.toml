@@ -1,0 +1,17 @@
+[package]
+name = "jpeg_support"
+version = "0.1.0"
+authors = ["Nikita Volobuev <nikitavbv@gmail.com>", "Pavlo Myroniuk <pspos.developqkation@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+core = { path = "../core" }
+custom_error = "1.8.0"
+byteorder = "1.4.2"
+log = "0.4.0"
+env_logger = "0.8.3"
+ctor = "0.1.19"
+bit-vec = "0.6.3"
