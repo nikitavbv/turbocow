@@ -9,6 +9,7 @@ use writer::PNGWriter;
 
 pub mod reader;
 pub mod writer;
+pub mod inflate;
 
 pub struct PNGFormatSupportPlugin {
 }
