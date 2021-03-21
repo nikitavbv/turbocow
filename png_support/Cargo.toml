@@ -1,0 +1,14 @@
+[package]
+name = "png_support"
+version = "0.1.0"
+authors = ["Nikita Volobuev <nikitavbv@gmail.com>", "Pavlo Myroniuk <pspos.developqkation@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+core = { path = "../core" }
+custom_error = "1.8.0"
+byteorder = "1.4.2"
+bit-vec = "0.6.3"
