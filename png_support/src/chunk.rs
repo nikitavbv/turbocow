@@ -83,13 +83,13 @@ fn read_phys_chunk(data: &[u8]) -> Result<(PHYSChunk, &[u8]), PNGReaderError> {
     println!("{}", length);
     let chunk_type = from_utf8(&data[4..8]).unwrap();
     println!("{}", chunk_type);
-    let pHYs_chunk = PHYSChunk {
+    let phys_chunk = PHYSChunk {
         pixels_per_unit_x: BigEndian::read_u32(&data[8..12]),
         pixels_per_unit_y: BigEndian::read_u32(&data[12..16]),
         unit_specifier: data[16],
     };
-    println!("{:?}", pHYs_chunk);
-    Result::Ok((pHYs_chunk, &data[length + 12..]))
+    println!("{:?}", phys_chunk);
+    Result::Ok((phys_chunk, &data[length + 12..]))
 }
 
 fn read_text_chunk(data: &[u8]) -> Result<(TEXTChunk, &[u8]), PNGReaderError> {
@@ -122,10 +122,10 @@ fn read_iend_chunk(data: &[u8]) -> Result<&[u8], PNGReaderError> {
 }
 
 pub fn read_chunks(mut data: &[u8]) -> Result<PNGImage, PNGReaderError> {
-    let image = PNGImage::new();
+    let mut image = PNGImage::new();
     loop {
         match data[4..8] {
-            [71, 69, 78, 68] => {
+            [73, 69, 78, 68] => {
                 let chunks = read_iend_chunk(data)?;
                 if chunks.len() > 0 {
                     return Result::Err(PNGReaderError::InvalidChunk {

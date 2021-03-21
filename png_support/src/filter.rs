@@ -19,25 +19,25 @@ fn predict_paeth(a: u8, b: u8, c: u8) -> u8 {
     }
 }
 
-fn get_left(pos: usize, data: &Vec<u8>) -> u8 {
-    if pos == 0 {
+fn get_left(pos: usize, samples_amount: usize, data: &Vec<u8>) -> u8 {
+    if pos < samples_amount {
         return 0
     }
-    data[data.len() - 4]
+    data[data.len() - samples_amount]
 }
 
-fn get_upper(pos: usize, width: usize, data: &Vec<u8>) -> u8 {
-    if data.len() < width * 4 {
+fn get_upper(width: usize, samples_amount: usize, data: &Vec<u8>) -> u8 {
+    if data.len() < width * samples_amount {
         return 0;
     }
-    data[data.len() - 4 * width]
+    data[data.len() - samples_amount * width]
 }
 
-fn get_upper_left(pos: usize, width: usize, data: &Vec<u8>) -> u8 {
-    if pos == 0 || data.len() < width * 4 {
+fn get_upper_left(pos: usize, width: usize, samples_amount: usize, data: &Vec<u8>) -> u8 {
+    if pos == 0 || data.len() < width * samples_amount {
         return 0;
     }
-    data[data.len() - 4 * (width + 1)]
+    data[data.len() - samples_amount * (width + 1)]
 }
 
 fn unfilter_none(width: usize, samples_amount: usize, iter: &mut Iter<u8>) -> Vec<u8> {
@@ -105,9 +105,9 @@ fn unfilter_peath(width: usize, samples_amount: usize, iter: &mut Iter<u8>) -> V
     for i in 0..(width * samples_amount) {
         let val = *iter.next().unwrap();
         res.push((val as u16 + predict_paeth(
-            get_left(i, &res),
-            get_upper(i, width as usize, &res),
-            get_upper_left(i, width as usize, &res)
+            get_left(i, samples_amount, &res),
+            get_upper(width as usize, samples_amount, &res),
+            get_upper_left(i, width as usize, samples_amount, &res)
         ) as u16) as u8);
     }
     res

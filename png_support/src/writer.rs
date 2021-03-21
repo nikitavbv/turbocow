@@ -10,7 +10,7 @@ impl PNGWriter {
 
 impl ImageWriter for PNGWriter {
     
-    fn write(&self, image: &Image) -> Result<Vec<u8>, ImageIOError> {
+    fn write(&self, _image: &Image) -> Result<Vec<u8>, ImageIOError> {
         Result::Ok(Vec::new())
     }
 }

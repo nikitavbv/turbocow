@@ -1,11 +1,18 @@
-use core::models::{ImageReader, Image, ImageIOError};
+use core::models::{ImageReader, Image, ImageIOError, Pixel, ImageWriter};
 use custom_error::custom_error;
-use byteorder::{LittleEndian, ByteOrder, BigEndian};
-use std::str::from_utf8;
+use byteorder::{ByteOrder, LittleEndian};
+use std::iter::*;
+use crate::inflate::inflate_decompress;
+use crate::chunk::*;
+use crate::filter::*;
 
 custom_error! {pub PNGReaderError
     InvalidSignature {description: String} = "Invalid signature: {description}",
     InvalidBytes {description: String} = "Invalid bytes: {description}",
+    UnsupportedOption {description: String} = "Option is unsupported: {description}",
+    InvalidChunk {description: String} = "Invalid PNG chunk: {description}",
+    InvalidImageType {description: String} = "Invalid PNG image type: {description}",
+    BadImageData {description: String} = "Image data is corrupted: {description}",
 }
 
 pub struct PNGReader {
@@ -17,46 +24,57 @@ impl PNGReader {
     }
 }
 
-#[derive(Debug)]
-struct IHDRChunk {
-    width: u32,
-    height: u32,
-    bit_depth: u8,
-    colour_type: u8,
-    compression_method: u8,
-    filter_method: u8,
-    interlace_method: u8,
+pub struct PNGImage {
+    pub ihdr: Option<IHDRChunk>,
+    pub sbit: Option<SBITChunk>,
+    pub phys: Option<PHYSChunk>,
+    pub text: Option<TEXTChunk>,
+    pub idat: IDATChunk,
+}
+
+impl PNGImage {
+    pub const fn new() -> Self {
+        PNGImage {
+            ihdr: Option::None,
+            sbit:  Option::None,
+            phys:  Option::None,
+            text:  Option::None,
+            idat:  IDATChunk::new(),
+        }
+    }
 }
 
 #[derive(Debug)]
-struct SBITChunk {
-    sample_depths: Vec<u8>,
+pub enum PNGImageType {
+    Greyscale,
+    Truecolour,
+    IndexedColour,
+    GreyscaleAlpha,
+    TruecolourAlpha,
 }
 
-#[derive(Debug)]
-struct TEXTChunk {
-    text: String
-}
+impl PNGImageType {
+    pub fn from_number(number: u8) -> Result<PNGImageType, PNGReaderError> {
+        match number {
+            0 => Result::Ok(PNGImageType::Greyscale),
+            2 => Result::Ok(PNGImageType::Truecolour),
+            3 => Result::Ok(PNGImageType::IndexedColour),
+            4 => Result::Ok(PNGImageType::GreyscaleAlpha),
+            6 => Result::Ok(PNGImageType::TruecolourAlpha),
+            _ => Result::Err(PNGReaderError::InvalidImageType {
+                description: format!("{}", number)
+            }),
+        }
+    }
 
-#[derive(Debug)]
-struct PHYSChunk {
-    pixels_per_unit_x: u32,
-    pixels_per_unit_y: u32,
-    unit_specifier: u8,
-}
-
-#[derive(Debug)]
-struct IDATChunk {
-    data: Vec<u8>,
-}
-
-fn bytes_to_u32(data: &[u8]) -> Result<u32, PNGReaderError> {
-    if data.len() != 4 {
-        Result::Err(PNGReaderError::InvalidBytes {
-            description: format!("Unable toparse number from bytes: {:?}", data)
-        })
-    } else {
-        Result::Ok(0)
+    pub fn get_samples_amount(&self) -> usize {
+        match &self {
+            PNGImageType::Greyscale => 1,
+            PNGImageType::Truecolour => 3,
+            PNGImageType::IndexedColour => 1,
+            PNGImageType::GreyscaleAlpha => 2,
+            PNGImageType::TruecolourAlpha => 4,
+        }
     }
 }
 
@@ -73,97 +91,27 @@ fn validate_signature(data: &Vec<u8>) -> Result<(), PNGReaderError> {
     }
 }
 
-fn read_IHDR_chunk(data: &[u8]) -> Result<(IHDRChunk, &[u8]), PNGReaderError> {
-    let length = BigEndian::read_u32(&data[0..4]) as usize;
-    println!("{}", length);
-    let chunk_type = from_utf8(&data[4..8]).unwrap();
-    println!("{}", chunk_type);
-    if data[4..8] != [73, 72, 68, 82] {
-        panic!("IHDR chunk must be first. but got: {:?}", &data[4..8]);
+fn convert_to_pixels(_ihdr: &IHDRChunk, data: Vec<u8>) -> Vec<Pixel> {
+    println!("convert_to_pixels data len: {}", data.len());
+    let mut pixels = Vec::new();
+    let mut iter = data.iter();
+    loop {
+        let mut pixel = Pixel::zero();
+        match iter.next() {
+            Some(red) => pixel.red = *red,
+            None => return pixels,
+        };
+        match iter.next() {
+            Some(green) => pixel.green = *green,
+            None => return pixels,
+        };
+        match iter.next() {
+            Some(blue) => pixel.blue = *blue,
+            None => return pixels,
+        };
+        iter.next();
+        pixels.push(pixel);
     }
-    let ihdr_chunk = IHDRChunk {
-        width: BigEndian::read_u32(&data[8..12]),
-        height: BigEndian::read_u32(&data[12..16]),
-        bit_depth: data[16],
-        colour_type: data[17],
-        compression_method: data[18],
-        filter_method: data[19],
-        interlace_method: data[20]
-    };
-    println!("{:?}", ihdr_chunk);
-    Result::Ok((ihdr_chunk, &data[(length + 12)..]))
-}
-
-fn read_sBIT_chunk(data: &[u8]) -> Result<(SBITChunk, &[u8]), PNGReaderError> {
-    let length = BigEndian::read_u32(&data[0..4]) as usize;
-    println!("{}", length);
-    let chunk_type = from_utf8(&data[4..8]).unwrap();
-    println!("{}", chunk_type);
-    if data[4..8] != [115, 66, 73, 84] {
-        panic!("Expect [115, 66, 73, 84] chank type for sBIT, but got: {:?}", &data[4..8]);
-    }
-    let sample_depths = &data[8..(8 + length)];
-    println!("{:?}", sample_depths);
-    Result::Ok((SBITChunk { sample_depths: sample_depths.to_vec() }, &data[length + 12..]))
-}
-
-fn read_pHYs_chunk(data: &[u8]) -> Result<(PHYSChunk, &[u8]), PNGReaderError> {
-    let length = BigEndian::read_u32(&data[0..4]) as usize;
-    println!("{}", length);
-    let chunk_type = from_utf8(&data[4..8]).unwrap();
-    println!("{}", chunk_type);
-    if data[4..8] != [112, 72, 89, 115] {
-        panic!("Expect [112, 72, 89, 115] chank type for pHYs, but got: {:?}", &data[4..8]);
-    }
-    let pHYs_chunk = PHYSChunk {
-        pixels_per_unit_x: BigEndian::read_u32(&data[8..12]),
-        pixels_per_unit_y: BigEndian::read_u32(&data[12..16]),
-        unit_specifier: data[16],
-    };
-    println!("{:?}", pHYs_chunk);
-    Result::Ok((pHYs_chunk, &data[length + 12..]))
-}
-
-fn read_tEXt_chunk(data: &[u8]) -> Result<(TEXTChunk, &[u8]), PNGReaderError> {
-    let length = BigEndian::read_u32(&data[0..4]) as usize;
-    println!("{}", length);
-    let chunk_type = from_utf8(&data[4..8]).unwrap();
-    println!("{}", chunk_type);
-    if data[4..8] != [116, 69, 88, 116] {
-        panic!("Expect [116, 69, 88, 116] chank type for tEXt, but got: {:?}", &data[4..8]);
-    }
-    let text = from_utf8(&data[8..(8 + length)]).unwrap();
-    println!("{}", text);
-    Result::Ok((TEXTChunk { text: text.to_owned() }, &data[length + 12..]))
-}
-
-fn read_IDAT_chunk(data: &[u8]) -> Result<(IDATChunk, &[u8]), PNGReaderError> {
-    let length = BigEndian::read_u32(&data[0..4]) as usize;
-    println!("{}", length);
-    let chunk_type = from_utf8(&data[4..8]).unwrap();
-    println!("{}", chunk_type);
-    if data[4..8] != [73, 68, 65, 84] {
-        panic!("Expect [73, 68, 65, 84] chank type for IDAT, but got: {:?}", &data[4..8]);
-    }
-    let chunk_data = data[8..(8 + length)].to_vec();
-    Result::Ok((IDATChunk { data: chunk_data }, &data[length + 12..]))
-}
-
-fn read_IEND_chunk(data: &[u8]) -> Result<&[u8], PNGReaderError> {
-    let length = BigEndian::read_u32(&data[0..4]) as usize;
-    println!("{}", length);
-    let chunk_type = from_utf8(&data[4..8]).unwrap();
-    println!("{}", chunk_type);
-    if data[4..8] != [73, 69, 78, 68] {
-        panic!("Expect [73, 69, 78, 68] chank type for IEND, but got: {:?}", &data[4..8]);
-    }
-    let len_rest = &data[length + 12..].len();
-    println!("rest: {}", len_rest);
-    Result::Ok(&data[length + 12..])
-}
-
-fn read_chunks(data: &Vec<u8>) -> Result<(), PNGReaderError> {
-    Result::Ok(())
 }
 
 impl ImageReader for PNGReader {
@@ -172,29 +120,136 @@ impl ImageReader for PNGReader {
         validate_signature(data).map_err(|err| ImageIOError::FailedToRead {
             description: format!("File is corrupted or this is not a PNG file: {}", err)
         })?;
-        Result::Ok(Vec::new())
+        let image = read_chunks(&data[8..]).map_err(|err| ImageIOError::FailedToRead {
+            description: format!("Bad chunks: {}", err)
+        })?;
+        let ihdr = &image.ihdr.unwrap();
+        let uncompressed_data = inflate_decompress(&image.idat.data[0..]).unwrap();
+        let unfiltered_data = unfilter(ihdr, uncompressed_data).map_err(|err| ImageIOError::FailedToRead {
+            description: format!("Failed to unfilter data: {}", err)
+        })?;
+        let pixels = convert_to_pixels(ihdr, unfiltered_data);
+        Result::Ok(vec![Image { width: ihdr.width as usize, height: ihdr.height as usize, pixels }])
     }
 
+}
+
+
+pub struct BMPWriter {
+}
+
+impl BMPWriter {
+
+    pub fn new() -> Self {
+        BMPWriter {
+        }
+    }
+}
+
+impl ImageWriter for BMPWriter {
+    
+    fn write(&self, image: &Image) -> Result<Vec<u8>, ImageIOError> {
+        let mut output = vec![];
+
+        let mut dib_header = write_dib_header(&image);
+        let dib_header_size = dib_header.len() as u32;
+
+        output.append(&mut dib_header);
+        output.append(&mut write_pixel_array(&image));
+
+        let mut header = write_header(&output, dib_header_size);
+        header.append(&mut output);
+
+        let output = header;
+
+        Ok(output)
+    }
+}
+
+fn write_header(data: &Vec<u8>, dib_header_size: u32) -> Vec<u8> {
+    let header_size = 14;
+    let image_size = header_size + data.len();
+    let mut header = vec![0; header_size];
+
+    header[0] = 0x42;
+    header[1] = 0x4D;
+
+    LittleEndian::write_u32(&mut header[2..6], image_size as u32);
+    LittleEndian::write_u32(&mut header[10..14], dib_header_size + header_size as u32);
+
+    header
+}
+
+fn write_dib_header(image: &Image) -> Vec<u8> {
+    let header_len = 108;
+    let mut header = vec![0; header_len];
+
+    let bytes_per_pixel = 3;
+
+    LittleEndian::write_u32(&mut header[0..4], header_len as u32);
+    LittleEndian::write_i32(&mut header[4..8], image.width as i32);
+    LittleEndian::write_i32(&mut header[8..12], image.height as i32);
+    LittleEndian::write_u16(&mut header[12..14], 1);
+    LittleEndian::write_u16(&mut header[14..16], bytes_per_pixel * 8);
+    LittleEndian::write_u32(&mut header[16..20], 0);
+    LittleEndian::write_u32(&mut header[20..24], image.width as u32 * image.height as u32 * bytes_per_pixel as u32); // image_size
+    LittleEndian::write_i32(&mut header[24..28], 11811);
+    LittleEndian::write_i32(&mut header[28..32], 11811);
+
+    header
+}
+
+fn write_pixel_array(image: &Image) -> Vec<u8> {
+    let row_alignment = (image.width * 3) % 4;
+    let width_bytes = image.width * 3 + row_alignment;
+    let mut pixel_array = vec![0 as u8; (image.height * width_bytes) as usize];
+
+    let mut offset = 0;
+    for y in 0..image.height {
+        for x in 0..image.width {
+            let pixel = &image.get_pixel_bottom_left_origin(x, y);
+            
+            pixel_array[offset + 2] = pixel.red;
+            pixel_array[offset + 1] = pixel.green;
+            pixel_array[offset] = pixel.blue;
+
+            offset += 3;
+        }
+        
+        offset += row_alignment;
+    }
+
+    pixel_array
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs::read;
     use super::*;
+    use bit_vec::BitVec;
+    use std::io::prelude::*;
+    use std::fs::File;
 
     #[test]
-    fn test_IHDR_chunk() {
+    fn test() {
         let shisui_png = read("assets/shisui.png")
             .expect("Failed to load assets/shisui.png");
-        validate_signature(&shisui_png).unwrap();
-        let data = &shisui_png[8..];
-        let (_, data) = read_IHDR_chunk(data).unwrap();
-        let (_, data) = read_sBIT_chunk(data).unwrap();
-        let (_, data) = read_pHYs_chunk(data).unwrap();
-        let (_, data) = read_tEXt_chunk(data).unwrap();
-        let (_, data) = read_IDAT_chunk(data).unwrap();
-        let (_, data) = read_IDAT_chunk(data).unwrap();
-        let (_, data) = read_IDAT_chunk(data).unwrap();
-        let _ = read_IEND_chunk(data).unwrap();
+        let reader = PNGReader::new();
+        let images = reader.read(&shisui_png).unwrap();
+        let writer = BMPWriter::new();
+        let bytes = writer.write(&images[0]).unwrap();
+        let mut res_bmp = File::create("res1.bmp").unwrap();
+        res_bmp.write_all(&bytes[0..]).unwrap();
+    }
+
+    #[test]
+    fn bit_vec_test() {
+        let mut vec = BitVec::new();
+        vec.push(false);
+        vec.push(true);
+        vec.push(true);
+        println!("<{:?}>", &vec);
+        println!("{:?}", &vec.to_bytes());
+        assert_eq!(3, vec.len());
     }
 }

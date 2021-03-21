@@ -10,6 +10,8 @@ use writer::PNGWriter;
 pub mod reader;
 pub mod writer;
 pub mod inflate;
+pub mod chunk;
+pub mod filter;
 
 pub struct PNGFormatSupportPlugin {
 }

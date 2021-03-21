@@ -51,7 +51,7 @@ fn number_to_bits(number: u32, length: usize) -> Vec<bool> {
     let mut buff = [0, 0, 0, 0];
     // NativeEndian::write_u32(&mut buff, number);
     BigEndian::write_u32(&mut buff, number);
-    let mut vec = BitVec::from_bytes(&buff);
+    let vec = BitVec::from_bytes(&buff);
     // println!("{:?}", &vec);
     let mut result = Vec::new();
     for i in (32 - length)..32 {
@@ -94,7 +94,7 @@ fn get_lower_dis(dis: usize) -> usize {
     DIS_LOWER[dis]
 }
 
-fn bits_to_number(mut bits: BitVec) -> usize {
+fn bits_to_number(bits: BitVec) -> usize {
     if bits.len() == 0 {
         return 0;
     }
@@ -124,13 +124,13 @@ fn get_slice(dis: usize, len: usize, data: &Vec<u8>) -> Vec<u8> {
 
 fn read_compressed_block(let_len_tree: HashMap<Vec<bool>, usize>, dis_tree: HashMap<Vec<bool>, usize>, data: &mut BitStream) -> Vec<u8> {
     let mut decompressed_data = Vec::new();
-    let mut pos = 0;
+    // let mut pos = 0;
     loop {
         let value = read_huffman_code(&let_len_tree, data);
         if value < 256 {
             // println!("value: {}", value);
             decompressed_data.push(value as u8);
-            pos += 1;
+            // pos += 1;
         } else if value == 256 {
             println!("end of the block");
             break;
@@ -145,14 +145,14 @@ fn read_compressed_block(let_len_tree: HashMap<Vec<bool>, usize>, dis_tree: Hash
             let dis = get_lower_dis(dis) + bits_to_number(data.get_bits(get_dis_extra_bits_amount(dis)));
             // println!("pos: {}, len: {}, dis: {}", pos, len, dis);
             decompressed_data.append(&mut get_slice(dis, len, &decompressed_data));
-            pos += len;
+            // pos += len;
         }
     }
     decompressed_data
 }
 
 fn generate_huffman_tree(code_lengths: Vec<usize>) -> HashMap<Vec<bool>, usize> {
-    let mut n = code_lengths.len();
+    let n = code_lengths.len();
     let mut distinct_lengths = BTreeSet::new();
     for len in code_lengths.iter() {
         if *len > 0 {
@@ -191,7 +191,7 @@ fn read_huffman_code(tree: &HashMap<Vec<bool>, usize>, stream: &mut BitStream) -
 fn read_huffman_trees(data: &mut BitStream) -> Result<(HashMap<Vec<bool>, usize>, HashMap<Vec<bool>, usize>), PNGReaderError> {
     let hlit = data.get_bits(5);
     println!("hlit: {:?}", hlit);
-    let mut hlit = (hlit.to_bytes()[0] >> 3) as usize + 257;
+    let hlit = (hlit.to_bytes()[0] >> 3) as usize + 257;
     println!("hlit: {}", hlit);
 
     let hdist = data.get_bits(5);
@@ -338,7 +338,6 @@ mod tests {
 
     #[test]
     fn test_number_to_bits() {
-        let n = 4;
         let bit_vec = number_to_bits(10, 4);
         println!("{:?}", bit_vec);
     }
