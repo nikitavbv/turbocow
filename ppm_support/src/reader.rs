@@ -1,4 +1,4 @@
-use core::models::{ImageReader, Image, Pixel, ImageIOError};
+use core::models::{io::ImageReader, image::Image, pixel::Pixel, io::ImageIOError};
 use custom_error::custom_error;
 use std::str::from_utf8;
 

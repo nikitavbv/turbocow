@@ -2,11 +2,15 @@ use byteorder::{LittleEndian, ByteOrder};
 use custom_error::custom_error;
 use bit_vec::BitVec;
 
-use core::models::{Image, ImageIOError, ImageReader, Pixel};
+use core::models::{image::Image, io::{ImageIOError, ImageReader}, pixel::Pixel};
+
+use crate::common::{ColorTable, ImageData, init_dictionary, should_increase_code_size};
 
 // see:
 // https://www.fileformat.info/format/gif/egff.htm
 // https://www.mat.univie.ac.at/~kriegl/Skripten/CG/node47.html
+// https://commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011
+// http://commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art010
 
 custom_error! {pub GIFReaderError
     InvalidHeader {description: String} = "Invalid header: {description}",
@@ -34,14 +38,6 @@ struct Header {
     number_of_global_color_table_entries: u32,
 }
 
-#[derive(Clone)]
-struct ColorTable {
-
-    size: usize, // size of table in bytes
-
-    colors: Vec<Pixel>,
-}
-
 struct GraphicsControlExtension {
 
     size: usize, // size of this block in bytes
@@ -64,12 +60,6 @@ struct LocalImageDescriptor {
 
     has_local_color_table: bool,
     number_of_local_color_table_entries: u32,
-}
-
-struct ImageData {
-
-    size: usize, // size of this block in bytes
-    pixels: Vec<Pixel>,
 }
 
 impl GIFReader {
@@ -300,7 +290,7 @@ fn read_local_image_descriptor(data: &[u8]) -> Result<LocalImageDescriptor, GIFR
     })
 }
 
-fn read_image_data(data: &[u8], color_table: &ColorTable) -> Result<ImageData, GIFReaderError> {
+pub(crate) fn read_image_data(data: &[u8], color_table: &ColorTable) -> Result<ImageData, GIFReaderError> {
     let mut size = 1;
 
     let min_code_size_in_bits = data[0] + 1;
@@ -331,7 +321,7 @@ fn read_image_data(data: &[u8], color_table: &ColorTable) -> Result<ImageData, G
     let mut code_size = min_code_size_in_bits;
     let mut offset = 0;
     let mut prev_code = None;
-
+    
     while offset < bits.len() {
         let code = read_bits(&bits, offset, code_size) as usize;
 
@@ -371,7 +361,7 @@ fn read_image_data(data: &[u8], color_table: &ColorTable) -> Result<ImageData, G
             offset += code_size as usize;
         }
 
-        if dictionary.len() == 2u32.pow(code_size as u32) as usize && code_size < 12 {
+        if should_increase_code_size(&dictionary, code_size) {
             code_size += 1;
         }
     }
@@ -380,22 +370,6 @@ fn read_image_data(data: &[u8], color_table: &ColorTable) -> Result<ImageData, G
         size,
         pixels,
     })
-}
-
-fn init_dictionary(dictionary: &mut Vec<Vec<Pixel>>, color_table: &ColorTable) -> (usize, usize) {
-    dictionary.clear();
-    
-    for i in 0..color_table.colors.len() {
-        dictionary.push(vec![color_table.colors[i].clone()]);
-    }
-
-    let clear_index = dictionary.len();
-    dictionary.push(Vec::new());
-
-    let end_index = dictionary.len();
-    dictionary.push(Vec::new());
-
-    (clear_index, end_index)
 }
 
 fn read_bits(bits: &BitVec, offset: usize, total: u8) -> u16 {
@@ -419,7 +393,7 @@ fn bit_vec_for_source_bytes(data: &[u8]) -> BitVec {
 
 #[cfg(test)]
 mod tests {
-    use core::models::Pixel;
+    use core::models::pixel::Pixel;
     use std::fs::read;
 
     use super::*;
