@@ -26,10 +26,10 @@ png support deploy:
   extends:
     - .plugin_deploy
     - .png_support
-  needs: ['png support build', 'png support test']
+  needs: ['png support build']
 
 png support deploy windows:
   extends:
     - .plugin_deploy_windows
     - .png_support
-  needs: ['png support build windows', 'png support test']
+  needs: ['png support build windows']
