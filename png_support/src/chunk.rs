@@ -35,6 +35,26 @@ pub struct IDATChunk {
     pub data: Vec<u8>,
 }
 
+#[derive(Debug)]
+pub struct ICCPChunk {
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct TIMEChunk {
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct ZTXTChunk {
+    data: Vec<u8>,
+}
+
+
+#[derive(Debug)]
+pub struct ITXTChunk {
+    data: Vec<u8>,
+}
 impl IDATChunk {
     pub const fn new() -> Self {
         IDATChunk {
@@ -121,6 +141,43 @@ fn read_iend_chunk(data: &[u8]) -> Result<&[u8], PNGReaderError> {
     Result::Ok(&data[length + 12..])
 }
 
+fn read_iccp_chunk(data: &[u8]) -> Result<(ICCPChunk, &[u8]), PNGReaderError> {
+    let length = BigEndian::read_u32(&data[0..4]) as usize;
+    println!("{}", length);
+    let chunk_type = from_utf8(&data[4..8]).unwrap();
+    println!("{}", chunk_type);
+    let chunk_data = data[8..(8 + length)].to_vec();
+    Result::Ok((ICCPChunk { data: chunk_data }, &data[length + 12..]))
+}
+
+
+fn read_time_chunk(data: &[u8]) -> Result<(TIMEChunk, &[u8]), PNGReaderError> {
+    let length = BigEndian::read_u32(&data[0..4]) as usize;
+    println!("{}", length);
+    let chunk_type = from_utf8(&data[4..8]).unwrap();
+    println!("{}", chunk_type);
+    let chunk_data = data[8..(8 + length)].to_vec();
+    Result::Ok((TIMEChunk { data: chunk_data }, &data[length + 12..]))
+}
+
+fn read_ztxt_chunk(data: &[u8]) -> Result<(ZTXTChunk, &[u8]), PNGReaderError> {
+    let length = BigEndian::read_u32(&data[0..4]) as usize;
+    println!("{}", length);
+    let chunk_type = from_utf8(&data[4..8]).unwrap();
+    println!("{}", chunk_type);
+    let chunk_data = data[8..(8 + length)].to_vec();
+    Result::Ok((ZTXTChunk { data: chunk_data }, &data[length + 12..]))
+}
+
+fn read_itxt_chunk(data: &[u8]) -> Result<(ITXTChunk, &[u8]), PNGReaderError> {
+    let length = BigEndian::read_u32(&data[0..4]) as usize;
+    println!("{}", length);
+    let chunk_type = from_utf8(&data[4..8]).unwrap();
+    println!("{}", chunk_type);
+    let chunk_data = data[8..(8 + length)].to_vec();
+    Result::Ok((ITXTChunk { data: chunk_data }, &data[length + 12..]))
+}
+
 pub fn read_chunks(mut data: &[u8]) -> Result<PNGImage, PNGReaderError> {
     let mut image = PNGImage::new();
     loop {
@@ -163,6 +220,26 @@ pub fn read_chunks(mut data: &[u8]) -> Result<PNGImage, PNGReaderError> {
                 let (chunk, rest_data) = read_ihdr_chunk(data)?;
                 data = rest_data;
                 image.ihdr = Option::from(chunk);
+            },
+            [105, 67, 67, 80] => {
+                let (chunk, rest_data) = read_iccp_chunk(data)?;
+                data = rest_data;
+                image.iccp = Option::from(chunk);
+            },
+            [116, 73, 77, 69] => {
+                let (chunk, rest_data) = read_time_chunk(data)?;
+                data = rest_data;
+                image.time = Option::from(chunk);
+            },
+            [122, 84, 88, 116] => {
+                let (chunk, rest_data) = read_ztxt_chunk(data)?;
+                data = rest_data;
+                image.ztxt = Option::from(chunk);
+            },
+            [105, 84, 88, 116] => {
+                let (chunk, rest_data) = read_itxt_chunk(data)?;
+                data = rest_data;
+                image.itxt = Option::from(chunk);
             },
             _ => {
                 return Result::Err(PNGReaderError::InvalidChunk {

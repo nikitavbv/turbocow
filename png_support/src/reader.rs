@@ -4,7 +4,6 @@ use core::models::pixel::Pixel;
 use custom_error::custom_error;
 use byteorder::{ByteOrder, LittleEndian};
 use std::iter::*;
-use std::collections::HashMap;
 use crate::inflate::inflate_decompress;
 use crate::chunk::*;
 use crate::filter::*;
@@ -32,6 +31,10 @@ pub struct PNGImage {
     pub sbit: Option<SBITChunk>,
     pub phys: Option<PHYSChunk>,
     pub text: Option<TEXTChunk>,
+    pub iccp: Option<ICCPChunk>,
+    pub time: Option<TIMEChunk>,
+    pub ztxt: Option<ZTXTChunk>,
+    pub itxt: Option<ITXTChunk>,
     pub idat: IDATChunk,
 }
 
@@ -42,6 +45,10 @@ impl PNGImage {
             sbit:  Option::None,
             phys:  Option::None,
             text:  Option::None,
+            iccp: Option::None,
+            time: Option::None,
+            ztxt: Option::None,
+            itxt: Option::None,
             idat:  IDATChunk::new(),
         }
     }
@@ -96,6 +103,7 @@ fn validate_signature(data: &Vec<u8>) -> Result<(), PNGReaderError> {
 
 fn convert_to_pixels(_ihdr: &IHDRChunk, data: Vec<u8>) -> Vec<Pixel> {
     println!("convert_to_pixels data len: {}", data.len());
+    println!("{:?}", &data);
     let mut pixels = Vec::new();
     let mut iter = data.iter();
     loop {
@@ -112,7 +120,8 @@ fn convert_to_pixels(_ihdr: &IHDRChunk, data: Vec<u8>) -> Vec<Pixel> {
             Some(blue) => pixel.blue = *blue,
             None => return pixels,
         };
-        iter.next();
+        // iter.next();
+        println!("{:?}", pixel);
         pixels.push(pixel);
     }
 }
@@ -132,6 +141,7 @@ impl ImageReader for PNGReader {
             description: format!("Failed to unfilter data: {}", err)
         })?;
         let pixels = convert_to_pixels(ihdr, unfiltered_data);
+        println!("{:?}", pixels);
         Result::Ok(vec![Image { width: ihdr.width as usize, height: ihdr.height as usize, pixels }])
     }
 
@@ -235,13 +245,13 @@ mod tests {
 
     #[test]
     fn test() {
-        let shisui_png = read("assets/shisui.png")
+        let shisui_png = read("assets/simple3.png")
             .expect("Failed to load assets/shisui.png");
         let reader = PNGReader::new();
         let images = reader.read(&shisui_png).unwrap();
         let writer = BMPWriter::new();
-        let bytes = writer.write(&images[0], &ImageWriterOptions { options: HashMap::new() }).unwrap();
-        let mut res_bmp = File::create("res1.bmp").unwrap();
+        let bytes = writer.write(&images[0], &ImageWriterOptions::default()).unwrap();
+        let mut res_bmp = File::create("res3.bmp").unwrap();
         res_bmp.write_all(&bytes[0..]).unwrap();
     }
 

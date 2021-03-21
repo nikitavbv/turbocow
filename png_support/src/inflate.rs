@@ -264,6 +264,35 @@ fn read_huffman_trees(data: &mut BitStream) -> Result<(HashMap<Vec<bool>, usize>
     Result::Ok((lit_len_tree, dis_tree))
 }
 
+fn load_default_codes() -> (HashMap<Vec<bool>, usize>, HashMap<Vec<bool>, usize>) {
+    let mut lit_len_tree = HashMap::new();
+    let mut next_code = 0;
+    for i in 256..=279 {
+        lit_len_tree.insert(number_to_bits(next_code, 7), i);
+        next_code += 1;
+    }
+    next_code <<= 1;
+    for i in 0..=143 {
+        lit_len_tree.insert(number_to_bits(next_code, 8), i);
+        next_code += 1;
+    }
+    for i in 280..=285 {
+        lit_len_tree.insert(number_to_bits(next_code, 8), i);
+        next_code += 1;
+    }
+    next_code += 2;
+    next_code <<= 1;
+    for i in 144..=255 {
+        lit_len_tree.insert(number_to_bits(next_code, 9), i);
+        next_code += 1;
+    }
+    let mut dis_tree = HashMap::new();
+    for i in 0..=29 {
+        dis_tree.insert(number_to_bits(i, 5), i as usize);
+    }
+    (lit_len_tree, dis_tree)
+}
+
 fn decompress(mut data: &[u8]) -> Result<Vec<u8>, PNGReaderError> {
     let mut decompressed_data = Vec::new();
     let mut bits = BitStream::new(data);
@@ -278,7 +307,8 @@ fn decompress(mut data: &[u8]) -> Result<Vec<u8>, PNGReaderError> {
                 data = rest_data;
             },
             1 => {
-                unimplemented!();
+                let (let_len_tree, dis_tree) = load_default_codes();
+                decompressed_data.append(&mut read_compressed_block(let_len_tree, dis_tree, &mut bits));
             },
             2 => {
                 let (let_len_tree, dis_tree) = read_huffman_trees(&mut bits)?;
@@ -323,10 +353,7 @@ pub fn inflate_decompress(data: &[u8]) -> Result<Vec<u8>, PNGReaderError> {
     additional_bits.and(&BitVec::from_bytes(&[0b11000000]));
     let flevel_flag = additional_bits.to_bytes()[0] >> 6;
     println!("flevel_flag: {}", flevel_flag);
-    match flevel_flag {
-        2 => println!("all good. continue"),
-        _ => panic!("not supported"),
-    };
+    // The information in FLEVEL is not needed for decompression;
     let decompressed_data = decompress(&data[2..(data.len() - 4)]).unwrap();
     // TODO: read ADLER32 block
     Result::Ok(decompressed_data)
