@@ -101,9 +101,7 @@ fn validate_signature(data: &Vec<u8>) -> Result<(), PNGReaderError> {
     }
 }
 
-fn convert_to_pixels(_ihdr: &IHDRChunk, data: Vec<u8>) -> Vec<Pixel> {
-    println!("convert_to_pixels data len: {}", data.len());
-    println!("{:?}", &data);
+fn truecolor_samples_to_pixels(data: Vec<u8>) -> Vec<Pixel> {
     let mut pixels = Vec::new();
     let mut iter = data.iter();
     loop {
@@ -120,9 +118,49 @@ fn convert_to_pixels(_ihdr: &IHDRChunk, data: Vec<u8>) -> Vec<Pixel> {
             Some(blue) => pixel.blue = *blue,
             None => return pixels,
         };
-        // iter.next();
         println!("{:?}", pixel);
         pixels.push(pixel);
+    }
+}
+
+fn truecolor_alpha_samples_to_pixels(data: Vec<u8>) -> Vec<Pixel> {
+    let mut pixels = Vec::new();
+    let mut iter = data.iter();
+    loop {
+        let mut pixel = Pixel::zero();
+        match iter.next() {
+            Some(red) => pixel.red = *red,
+            None => return pixels,
+        };
+        match iter.next() {
+            Some(green) => pixel.green = *green,
+            None => return pixels,
+        };
+        match iter.next() {
+            Some(blue) => pixel.blue = *blue,
+            None => return pixels,
+        };
+        match iter.next() {
+            Some(alpha) => pixel.alpha = *alpha,
+            None => return pixels,
+        };
+        println!("{:?}", pixel);
+        pixels.push(pixel);
+    }
+}
+
+fn convert_to_pixels(ihdr: &IHDRChunk, data: Vec<u8>) -> Result<Vec<Pixel>, PNGReaderError> {
+    println!("convert_to_pixels data len: {}", data.len());
+    println!("{:?}", &data);
+    let image_type = &ihdr.colour_type;
+    match image_type {
+        PNGImageType::Truecolour => Result::Ok(truecolor_samples_to_pixels(data)),
+        PNGImageType::TruecolourAlpha => Result::Ok(
+            truecolor_alpha_samples_to_pixels(data)
+        ),
+        _ => Result::Err(PNGReaderError::UnsupportedOption {
+            description: format!("Color type {:?} is not supported yet", image_type)
+        }),
     }
 }
 
@@ -140,13 +178,14 @@ impl ImageReader for PNGReader {
         let unfiltered_data = unfilter(ihdr, uncompressed_data).map_err(|err| ImageIOError::FailedToRead {
             description: format!("Failed to unfilter data: {}", err)
         })?;
-        let pixels = convert_to_pixels(ihdr, unfiltered_data);
+        let pixels = convert_to_pixels(ihdr, unfiltered_data).map_err(|err| ImageIOError::FailedToRead {
+            description: format!("Failed to construxt pixels: {}", err)
+        })?;
         println!("{:?}", pixels);
         Result::Ok(vec![Image { width: ihdr.width as usize, height: ihdr.height as usize, pixels }])
     }
 
 }
-
 
 pub struct BMPWriter {
 }
