@@ -1,16 +1,16 @@
 use byteorder::{ByteOrder, BigEndian};
 use std::str::from_utf8;
-use crate::reader::{PNGReaderError, PNGImage};
+use crate::reader::{PNGReaderError, PNGImage, PNGImageType};
 
 #[derive(Debug)]
 pub struct IHDRChunk {
-    width: u32,
-    height: u32,
-    bit_depth: u8,
-    colour_type: u8,
-    compression_method: u8,
-    filter_method: u8,
-    interlace_method: u8,
+    pub width: u32,
+    pub height: u32,
+    pub bit_depth: u8,
+    pub colour_type: PNGImageType,
+    pub compression_method: u8,
+    pub filter_method: u8,
+    pub interlace_method: u8,
 }
 
 #[derive(Debug)]
@@ -32,7 +32,7 @@ pub struct PHYSChunk {
 
 #[derive(Debug)]
 pub struct IDATChunk {
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl IDATChunk {
@@ -59,7 +59,7 @@ fn read_ihdr_chunk(data: &[u8]) -> Result<(IHDRChunk, &[u8]), PNGReaderError> {
         width: BigEndian::read_u32(&data[8..12]),
         height: BigEndian::read_u32(&data[12..16]),
         bit_depth: data[16],
-        colour_type: data[17],
+        colour_type: PNGImageType::from_number(data[17])?,
         compression_method: data[18],
         filter_method: data[19],
         interlace_method: data[20]
@@ -130,6 +130,10 @@ pub fn read_chunks(mut data: &[u8]) -> Result<PNGImage, PNGReaderError> {
                 if chunks.len() > 0 {
                     return Result::Err(PNGReaderError::InvalidChunk {
                         description: "IEND chunk must be last".to_owned()
+                    });
+                } else if image.ihdr.is_none() {
+                    return Result::Err(PNGReaderError::InvalidChunk {
+                        description: "Missing IHDR chunk".to_owned()
                     });
                 } else {
                     return Result::Ok(image);
