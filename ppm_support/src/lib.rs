@@ -39,3 +39,4 @@ impl ImageFormatSupportPlugin for PPMFormatSupportPlugin {
 pub fn _plugin_init() -> Box<dyn ImageFormatSupportPlugin> {
     box PPMFormatSupportPlugin::new()
 }
+
