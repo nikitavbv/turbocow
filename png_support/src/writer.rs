@@ -1,4 +1,5 @@
-use core::models::{ImageWriter, Image, ImageIOError};
+use core::models::io::{ImageWriter, ImageIOError, ImageWriterOptions};
+use core::models::image::Image;
 pub struct PNGWriter {
 }
 
@@ -10,7 +11,7 @@ impl PNGWriter {
 
 impl ImageWriter for PNGWriter {
     
-    fn write(&self, _image: &Image) -> Result<Vec<u8>, ImageIOError> {
+    fn write(&self, _image: &Image, _options: &ImageWriterOptions) -> Result<Vec<u8>, ImageIOError> {
         Result::Ok(Vec::new())
     }
 }

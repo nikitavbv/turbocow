@@ -2,7 +2,7 @@
 
 extern crate custom_error;
 
-use core::{plugins::ImageFormatSupportPlugin, models::{ImageReader, ImageWriter}};
+use core::{plugins::ImageFormatSupportPlugin, models::io::{ImageReader, ImageWriter}};
 
 use reader::PNGReader;
 use writer::PNGWriter;

@@ -1,7 +1,10 @@
-use core::models::{ImageReader, Image, ImageIOError, Pixel, ImageWriter};
+use core::models::io::{ImageReader, ImageIOError, ImageWriter, ImageWriterOptions};
+use core::models::image::Image;
+use core::models::pixel::Pixel;
 use custom_error::custom_error;
 use byteorder::{ByteOrder, LittleEndian};
 use std::iter::*;
+use std::collections::HashMap;
 use crate::inflate::inflate_decompress;
 use crate::chunk::*;
 use crate::filter::*;
@@ -148,7 +151,7 @@ impl BMPWriter {
 
 impl ImageWriter for BMPWriter {
     
-    fn write(&self, image: &Image) -> Result<Vec<u8>, ImageIOError> {
+    fn write(&self, image: &Image, _options: &ImageWriterOptions) -> Result<Vec<u8>, ImageIOError> {
         let mut output = vec![];
 
         let mut dib_header = write_dib_header(&image);
@@ -237,7 +240,7 @@ mod tests {
         let reader = PNGReader::new();
         let images = reader.read(&shisui_png).unwrap();
         let writer = BMPWriter::new();
-        let bytes = writer.write(&images[0]).unwrap();
+        let bytes = writer.write(&images[0], &ImageWriterOptions { options: HashMap::new() }).unwrap();
         let mut res_bmp = File::create("res1.bmp").unwrap();
         res_bmp.write_all(&bytes[0..]).unwrap();
     }
