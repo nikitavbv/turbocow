@@ -11,5 +11,7 @@ include:
   - local: 'ci/images.yml'
   - local: 'ci/bmp_support.yml'
   - local: 'ci/gif_support.yml'
+  - local: 'ci/jpeg_support.yml'
+  - local: 'ci/png_support.yml'
   - local: 'ci/core.yml'
   - local: 'ci/converter.yml'

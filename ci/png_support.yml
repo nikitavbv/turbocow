@@ -1,0 +1,35 @@
+.png_support:
+  variables:
+    CRATE_NAME: png_support
+  only:
+    changes:
+      - png_support/**/*
+      - ci/png_support.yml
+      - ci/templates.yml
+
+png support test:
+  extends: 
+    - .cargo_test
+    - .png_support
+
+png support build:
+  extends: 
+    - .cargo_build_lib
+    - .png_support
+
+png support build windows:
+  extends: 
+    - .cargo_build_lib_windows
+    - .png_support
+
+png support deploy:
+  extends:
+    - .plugin_deploy
+    - .png_support
+  needs: ['png support build', 'png support test']
+
+png support deploy windows:
+  extends:
+    - .plugin_deploy_windows
+    - .png_support
+  needs: ['png support build windows', 'png support test']
