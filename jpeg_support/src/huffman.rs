@@ -32,8 +32,8 @@ impl HuffmanTree {
         &self.root.insert_code(code_length, code_value);
     }
 
-    pub fn to_map(&self) -> HashMap<u16, u8> {
-        self.root.to_map(0)
+    pub fn to_map(&self) -> HashMap<(u16, u16), u8> {
+        self.root.to_map(0, 0)
     }
 }
 
@@ -125,16 +125,16 @@ impl HuffmanTreeNode {
         }
     }
 
-    pub fn to_map(&self, prefix: u16) -> HashMap<u16, u8> {
+    pub fn to_map(&self, prefix: u16, length: u16) -> HashMap<(u16, u16), u8> {
         let mut map = HashMap::new();
 
         let left_entries = match &self.left {
             None => HashMap::new(),
-            Some(left) => left.to_map(prefix << 1)
+            Some(left) => left.to_map(prefix << 1, length + 1)
         };
         let right_entries = match &self.right {
             None => HashMap::new(),
-            Some(right) => right.to_map((prefix << 1) + 1)
+            Some(right) => right.to_map((prefix << 1) + 1, length + 1)
         };
 
         map.extend(left_entries);
@@ -146,14 +146,14 @@ impl HuffmanTreeNode {
 
 impl HuffmanTreeNodeElement {
     
-    fn to_map(&self, prefix: u16) -> HashMap<u16, u8> {
+    fn to_map(&self, prefix: u16, length: u16) -> HashMap<(u16, u16), u8> {
         match &self {
             HuffmanTreeNodeElement::Value(v) => {
                 let mut map = HashMap::new();
-                map.insert(prefix, *v);
+                map.insert((prefix, length - 1), *v);
                 map
             },
-            HuffmanTreeNodeElement::Link(node) => node.to_map(prefix)
+            HuffmanTreeNodeElement::Link(node) => node.to_map(prefix, length)
         }
     }
 }
