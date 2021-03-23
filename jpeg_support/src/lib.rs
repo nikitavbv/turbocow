@@ -8,6 +8,7 @@ use writer::JPEGWriter;
 #[macro_use]
 extern crate log;
 extern crate custom_error;
+extern crate lazy_static;
 
 mod huffman;
 pub mod reader;
@@ -26,7 +27,7 @@ impl JPEGSupportPlugin {
 impl ImageFormatSupportPlugin for JPEGSupportPlugin {
 
     fn format_name(&self) -> String {
-        "JPEG".to_string()
+        "JPG".to_string()
     }
 
     fn reader(&self) -> Box<dyn ImageReader> {
