@@ -86,7 +86,7 @@ fn convert_file(plugins: &Plugins, from_file: &str, to_format: &str) {
         .find(|v| v.format_name().eq_ignore_ascii_case(&to_format)) {
         Some(v) => v,
         None => {
-            error!("Failed to find plugin to write {}. Did you install it? Try running \"converter plugins install {}_support\"", extension, extension);
+            error!("Failed to find plugin to write {}. Did you install it? Try running \"converter plugins install {}_support\"", to_format, to_format);
             return;
         }
     };
