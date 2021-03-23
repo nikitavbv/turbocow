@@ -7,10 +7,10 @@
       - ci/png_support.yml
       - ci/templates.yml
 
-png support test:
-  extends: 
-    - .cargo_test
-    - .png_support
+#png support test:
+#  extends: 
+#    - .cargo_test
+#    - .png_support
 
 png support build:
   extends: 
