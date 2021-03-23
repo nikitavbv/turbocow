@@ -1,6 +1,7 @@
 use std::f32::consts::PI;
-use byteorder::{BigEndian, ByteOrder, LittleEndian};
+use byteorder::{BigEndian, ByteOrder};
 use custom_error::custom_error;
+use lazy_static::lazy_static;
 use bit_vec::BitVec;
 
 use core::models::{image::Image, pixel::Pixel, io::{ImageIOError, ImageReader}};
@@ -15,6 +16,20 @@ custom_error! {pub JPEGReaderError
     InvalidHeader {description: String} = "Invalid header: {description}",
     InvalidSegment {description: String} = "Invalid segment: {description}",
     InvalidEncodedData {description: String} = "Invalid encoded data: {description}",
+}
+
+lazy_static! {
+    static ref DCT_PRECOMPUTED: [f32; 4096] = precompute_dct();
+    static ref ZIGZAG_ORDER: [usize; 64] = [
+        1,  2, 6,  7, 15, 16, 28, 29,
+        3,  5, 8,  14, 17, 27, 30, 43,
+        4,  9, 13, 18, 26, 31, 42, 44,
+       10, 12, 19, 25, 32, 41, 45, 54,
+       11, 20, 24, 33, 40, 46, 53, 55,
+       21, 23, 34, 39, 47, 52, 56, 61,
+       22, 35, 38, 48, 51, 57, 60, 62,
+       36, 37, 49, 50, 58, 59, 63, 64 
+    ];
 }
 
 pub struct JPEGReader {
@@ -120,7 +135,7 @@ impl JPEG {
 #[derive(Clone)]
 struct QuantizationTable {
     id: u8,
-    data: Vec<u8>, // raw
+    data: [i32; 64],
 }
 
 #[derive(Clone)]
@@ -163,7 +178,7 @@ impl ImageReader for JPEGReader {
             data = &data[offset..];
         }
 
-        Ok(vec![jpeg.image.unwrap()])
+        Ok(vec![jpeg.image.expect("expected image to be present, because checked for it previously")])
     }
 }
 
@@ -263,6 +278,7 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
     let horizontal_mcus = ((jpeg.width as f32) / (max_horizontal_sampling as f32)).ceil() as usize;
     let vertical_mcus = ((jpeg.height as f32) / (max_vertical_sampling as f32)).ceil() as usize;
     trace!("image dimensions in MCUs: {} {}", horizontal_mcus, vertical_mcus);
+    let mut prev_dc = vec![0; total_channels as usize];
 
     let mut image = Image::new(
         ((jpeg.width as f32 / max_horizontal_sampling as f32).ceil() * max_horizontal_sampling as f32) as usize, 
@@ -270,14 +286,14 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
     );
 
     for row in 0..vertical_mcus {
-        trace!("reading row {}/{} with offset {}", row, vertical_mcus, offset);
         for col in 0..horizontal_mcus {
             let mut channel_data: HashMap<u8, Vec<i32>> = HashMap::new();
 
             for channel_id in 1..=total_channels {
-                let channel = jpeg.channels.iter().find(|c| c.id == channel_id).unwrap();
-                let mut prev_dc = None;
-                let mut matrices: Vec<Vec<i32>> = Vec::new();
+                let channel = jpeg.channels.iter().find(|c| c.id == channel_id).ok_or(JPEGReaderError::InvalidEncodedData {
+                    description: format!("Channel with id {} not found", channel_id),
+                })?;
+                let mut matrices: Vec<[i32; 64]> = Vec::new();
 
                 let mut bitgroup = 0;
                 let mut bitgroup_length = 0;            
@@ -294,9 +310,10 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                 for _ in 0..channel.vertical_sampling {
                     for _ in 0..channel.horizontal_sampling {
                         let mut dc_factor_read = false;
-                        let mut factors: Vec<i32> = Vec::with_capacity(8 * 8);
+                        let mut factor_vals: [i32; 64] = [0i32; 64];
+                        let mut factor_offset = 0;
 
-                        while factors.len() < 64 {
+                        while factor_offset < 64 {
                             bitgroup = (bitgroup << 1) | (if bitvec[offset] { 1 } else { 0 });
                             offset += 1;
                             bitgroup_length += 1;
@@ -308,7 +325,7 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                                     bitgroup_length = 0;
                     
                                     if value == 0 {
-                                        factors.push(0);
+                                        factor_offset += 1;
                                     } else {
                                         let mut factor: i32 = 0;
                                         let mut first_bit_is_one = false;
@@ -325,7 +342,8 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                                             factor = factor - 2i32.pow(value as u32) + 1;
                                         }
 
-                                        factors.push(factor);
+                                        factor_vals[factor_offset] = factor;
+                                        factor_offset += 1;
                                     }
                                     dc_factor_read = true;
                                 }
@@ -336,16 +354,11 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                                     bitgroup_length = 0;
                     
                                     if value == 0 {
-                                        while factors.len() < 64 {
-                                            factors.push(0);
-                                        }
+                                        factor_offset = 64;
                                     } else {
                                         let number_of_zeros = value >> 4;
                                         let factor_length = value & 0b1111;
-                    
-                                        for _ in 0..number_of_zeros {
-                                            factors.push(0);
-                                        }
+                                        factor_offset += number_of_zeros as usize;
                     
                                         let mut factor: i32 = 0;
                                         let mut first_bit_is_one = false;
@@ -362,34 +375,31 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                                             factor = factor - 2i32.pow(factor_length as u32) + 1;
                                         }
                     
-                                        factors.push(factor);
+                                        factor_vals[factor_offset] = factor;
+                                        factor_offset += 1;
                                     }
                                 }
                             }
 
-                            if factors.len() == 64 {
-                                if let Some(prev_dc) = prev_dc {
-                                    factors[0] += prev_dc;
-                                }
-                    
-                                prev_dc = Some(factors[0]);
-                                matrices.push(factors.clone());
+                            if factor_offset == 64 {
+                                factor_vals[0] += prev_dc[channel_id as usize - 1];
+                                prev_dc[channel_id as usize - 1] = factor_vals[0];
+                                matrices.push(unzigzag_64(&factor_vals));
                             }
                         }
                     }
                 }
 
                 // quantization
-                let quantization_table: Vec<i32> = jpeg.quantization_table_by_id(channel.quantization_table_id)
-                    .unwrap()
-                    .data.iter()
-                    .map(|v| *v as i32)
-                    .collect();
-
+                let quantization_table: [i32; 64] = jpeg.quantization_table_by_id(channel.quantization_table_id)
+                    .ok_or(JPEGReaderError::InvalidEncodedData {
+                        description: format!("Quantization table with id {} not found", channel.quantization_table_id)
+                    })?
+                    .data;
+                
                 // discrete cosine transform
-                let matrices: Vec<Vec<i32>> = matrices.iter()
-                    .map(|m| unzigzag(m))
-                    .map(|m| multiply(&m, &unzigzag(&quantization_table)))
+                let matrices: Vec<[i32; 64]> = matrices.iter()
+                    .map(|m| multiply_64(&m, &quantization_table))
                     .map(|m| perform_dct(&m))
                     .collect();
 
@@ -430,14 +440,12 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                 channel_data.insert(channel_id, scale_result);
             }
 
-            // println!("channel_data: {:?}", channel_data);
-
             let image_x_offset = col * max_horizontal_sampling as usize;
             let image_y_offset = row * max_vertical_sampling as usize;
 
-            let y_channel = channel_data.get(&1).unwrap();
-            let cb_channel = channel_data.get(&2).unwrap();
-            let cr_channel = channel_data.get(&3).unwrap();
+            let y_channel = channel_data.get(&1).expect("Expected channel with id = 1 to be present, becuase already checked for that");
+            let cb_channel = channel_data.get(&2).expect("Expected channel with id = 2 to be present, becuase already checked for that");
+            let cr_channel = channel_data.get(&3).expect("Expected channel with id = 3 to be present, becuase already checked for that");
             for y in 0..max_vertical_sampling {
                 for x in 0..max_horizontal_sampling {
                     let (r, g, b) = ycbcr_to_rgb(
@@ -449,6 +457,7 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                     image.set_pixel(image_x_offset + x as usize, image_y_offset + y as usize, Pixel::from_rgb(r, g, b));
                 }
             }
+
         }
     }
 
@@ -463,59 +472,65 @@ fn ycbcr_to_rgb(y: i32, cb: i32, cr: i32) -> (u8, u8, u8) {
     (r, g, b)
 }
 
-fn perform_dct(matrix: &[i32]) -> Vec<i32> {
-    let mut result: Vec<i32> = vec![0; 8 * 8];
+fn precompute_dct() -> [f32; 4096] {
+    let mut res = [0f32; 4096];
+
+    for y in 0..8 {
+        for x in 0..8 {
+            for v in 0..8 {
+                for u in 0..8 {
+                    let mut m: f32 = if u == 0 { 1.0/2f32.sqrt() } else { 1.0 };
+                    m *= if v == 0 { 1.0/2f32.sqrt() } else { 1.0 };
+                    m *= (((2.0 * (x as f32) + 1.0) * (u as f32) * PI) / 16.0).cos();
+                    m *= (((2.0 * (y as f32) + 1.0) * (v as f32) * PI) / 16.0).cos();
+                    res[y * 512 + x * 64 + v * 8 + u] = m / 4.0;
+                }
+            }
+        }
+    }
+
+    res
+}
+
+fn perform_dct(matrix: &[i32; 64]) -> [i32; 64] {
+    let mut result  = [0f32; 8 * 8];
 
     for y in 0..8 {
         for x in 0..8 {
             let mut sum: f32 = 0.0;
+            let offset = y * 512 + x * 64;
 
-            for u in 0..8 {
-                for v in 0..8 {
-                    let mut m: f32 = if u == 0 { 1.0/2f32.sqrt() } else { 1.0 };
-                    m *= if v == 0 { 1.0/2f32.sqrt() } else { 1.0 };
-                    m *= matrix[v * 8 + u] as f32;
-                    m *= (((2.0 * (x as f32) + 1.0) * (u as f32) * PI) / 16.0).cos();
-                    m *= (((2.0 * (y as f32) + 1.0) * (v as f32) * PI) / 16.0).cos();
-
-                    sum += m;
-                }
+            for (a, b) in matrix.iter().zip(&DCT_PRECOMPUTED[offset..offset+64]) {
+                sum += *a as f32 * *b;
             }
 
-            result[y * 8 + x] = ((sum / 4.0).round() as i32 + 128).max(0).min(255);
+            result[y * 8 + x] = sum;
         }
     }
 
-    result
+    let mut result_rounded = [128; 64];
+    for i in 0..64 {
+        result_rounded[i] += (result[i] as i32).max(-128).min(128);
+    }
+
+    result_rounded
 }
 
-fn unzigzag(matrix: &[i32]) -> Vec<i32> {
-    // I am so lazy today, lol
-    let order = vec![
-         1,  2, 6,  7, 15, 16, 28, 29,
-         3,  5, 8,  14, 17, 27, 30, 43,
-         4,  9, 13, 18, 26, 31, 42, 44,
-        10, 12, 19, 25, 32, 41, 45, 54,
-        11, 20, 24, 33, 40, 46, 53, 55,
-        21, 23, 34, 39, 47, 52, 56, 61,
-        22, 35, 38, 48, 51, 57, 60, 62,
-        36, 37, 49, 50, 58, 59, 63, 64 
-    ];
+fn unzigzag_64(matrix: &[i32; 64]) -> [i32; 64] {
+    let mut result = [0i32; 64];
 
-    let mut result = Vec::with_capacity(matrix.len());
-
-    for i in 0..matrix.len().min(64) {
-        result.push(matrix[order[i] - 1]);
+    for i in 0..64 {
+        result[i] = matrix[ZIGZAG_ORDER[i] - 1];
     }
 
     result
 }
 
-fn multiply(a: &Vec<i32>, b: &Vec<i32>) -> Vec<i32> {
-    let mut result = Vec::with_capacity(a.len());
+fn multiply_64(a: &[i32; 64], b: &[i32; 64]) -> [i32; 64] {
+    let mut result = [0i32; 64];
 
-    for i in 0..a.len() {
-        result.push(a[i] * b[i]);
+    for i in 0..64 {
+        result[i] = a[i] * b[i];
     }
 
     result
@@ -617,10 +632,17 @@ fn read_quantization_table(data: &[u8]) -> Result<(QuantizationTable, usize), JP
             description: format!("Quantization tables with entries of length {} are not supported", entry_length),
         });
     }
+    
+    let mut new_data = [0i32; 64];
+    for i in 0..64 {
+        new_data[i] = data[i] as i32;
+    }
+
+    let data = unzigzag_64(&new_data);
 
     let table = QuantizationTable {
         id: table_id,
-        data: data.to_vec(),
+        data,
     };
 
     Ok((table, block_length + 2))
@@ -636,11 +658,7 @@ fn read_application_specific_data(data: &[u8]) -> Result<usize, JPEGReaderError>
 
 #[cfg(test)]
 mod tests {
-    // use crate::bmp_writer::BMPWriter;
-
     use super::*;
-
-    use core::models::io::{ImageWriter, ImageWriterOptions};
     use std::fs::read;
 
     #[ctor::ctor]
@@ -650,19 +668,17 @@ mod tests {
 
     #[test]
     fn test_read_simple() {
-        let image_data = read("assets/google.jpg")
+        let image_data = read("assets/bridge.jpg")
             .expect("failed to load test image");
         
         let reader = JPEGReader::new();
         let images = reader.read(&image_data)
             .expect("failed to read test image");
 
-        /*let image = &images[0];
-        let writer = BMPWriter::new();
-        let data = writer.write(&image, &ImageWriterOptions::default()).unwrap();
+        assert_eq!(images.len(), 1);
 
-        std::fs::write("assets/result.bmp", &data).unwrap();*/
-
-        //assert_eq!(images.len(), 1);
+        let image = &images[0];
+        assert_eq!(Pixel::from_rgb(109, 115, 127), image.get_pixel(720, 700));
+        assert_eq!(Pixel::from_rgb(216, 148, 169), image.get_pixel(1290, 550));
     }
 }
