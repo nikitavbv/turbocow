@@ -7,7 +7,7 @@ use bit_vec::BitVec;
 use core::models::{image::Image, pixel::Pixel, io::{ImageIOError, ImageReader}};
 use std::collections::HashMap;
 
-use crate::huffman::HuffmanTree;
+use crate::{common::Channel, huffman::HuffmanTree};
 
 // see:
 // https://habr.com/ru/post/102521/
@@ -37,7 +37,7 @@ pub struct JPEGReader {
 
 impl JPEGReader {
 
-    fn new() -> Self {
+    pub fn new() -> Self {
         JPEGReader {}
     }
 }
@@ -136,14 +136,6 @@ impl JPEG {
 struct QuantizationTable {
     id: u8,
     data: [i32; 64],
-}
-
-#[derive(Clone)]
-struct Channel {
-    id: u8,
-    horizontal_sampling: u8,
-    vertical_sampling: u8,
-    quantization_table_id: u8,
 }
 
 #[derive(Clone)]
@@ -619,6 +611,8 @@ fn read_baseline_dct(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRead
 }
 
 fn read_quantization_table(data: &[u8]) -> Result<(QuantizationTable, usize), JPEGReaderError> {
+    trace!("reading quantization table");
+
     let block_length = BigEndian::read_u16(&data[0..2]) as usize;
     let data = &data[2..];
 

@@ -3,6 +3,10 @@ use std::f32::consts::PI;
 use core::models::{image::Image, pixel::Pixel, io::{ImageIOError, ImageWriter, ImageWriterOptions}};
 use std::{collections::HashMap, convert::TryInto};
 
+use byteorder::{BigEndian, ByteOrder};
+
+use crate::common::Channel;
+
 const QUANTIZATION_TABLE_Y: [i32; 64] = [
      3,  2,  2,  3,  4,  6,  8, 10, 
      2,  2,  2,  3,  4,  9, 10,  9, 
@@ -51,13 +55,13 @@ impl ImageWriter for JPEGWriter {
     
     fn write(&self, image: &Image, _options: &ImageWriterOptions) -> Result<Vec<u8>, ImageIOError> {
         let mut quantization_tables: HashMap<u8, [i32; 64]> = HashMap::with_capacity(3);
-        quantization_tables.insert(1, QUANTIZATION_TABLE_Y.clone());
-        quantization_tables.insert(2, QUANTIZATION_TABLE_CB_CR.clone());
+        quantization_tables.insert(0, QUANTIZATION_TABLE_Y.clone());
+        quantization_tables.insert(1, QUANTIZATION_TABLE_CB_CR.clone());
         
         let mut quantization_table_by_channel: HashMap<u8, u8> = HashMap::new();
-        quantization_table_by_channel.insert(1, 1);
-        quantization_table_by_channel.insert(2, 2);
-        quantization_table_by_channel.insert(3, 2);
+        quantization_table_by_channel.insert(1, 0);
+        quantization_table_by_channel.insert(2, 1);
+        quantization_table_by_channel.insert(3, 1);
 
         let mut pixels_ycbcr: Vec<[i32; 3]> = Vec::with_capacity(image.width * image.height);
         for y in 0..image.height {
@@ -81,10 +85,85 @@ impl ImageWriter for JPEGWriter {
             channels.insert(channel, channel_values);
         }
 
+        let channels: Vec<Channel> = (0..3).map(|i| {
+            let id  = i + 1;
+
+            Channel {
+                id,
+                horizontal_sampling: 1,
+                vertical_sampling: 1,
+                quantization_table_id: *quantization_table_by_channel.get(&id).unwrap(),
+            }
+        }).collect();
+
         // huffman encode
 
-        Ok(vec![])
+
+        // writing
+        let mut data = vec![0xFF, 0xD8]; // start with magic
+        for (table_id, table) in quantization_tables {
+            data.append(&mut prepend_marker(0xDB, write_quantization_table(table_id, &table)));
+        }
+        data.append(&mut prepend_marker(0xC0, write_baseline_dct(
+            image.width as u16, 
+            image.height as u16,
+            &channels
+        )));
+
+        Ok(data)
     }
+}
+
+fn write_baseline_dct(width: u16, height: u16, channels: &Vec<Channel>) -> Vec<u8> {
+    let mut data = vec![0u8; 17];
+    
+    let block_length = data.len();
+    BigEndian::write_u16(&mut data[0..2], block_length as u16);
+
+    // precision in bits for components
+    data[2] = 8;
+
+    BigEndian::write_u16(&mut data[3..5], height);
+    BigEndian::write_u16(&mut data[5..7], width);
+
+    let total_channels = 3;
+    data[7] = total_channels;
+
+    for i in 0..total_channels {
+        let channel = &channels[i as usize];
+        let offset: usize = 8 + (i as usize) * 3;
+
+        data[offset] = channel.id;
+        data[offset + 1] = channel.horizontal_sampling << 4 | channel.vertical_sampling;
+        data[offset + 2] = channel.quantization_table_id;
+    }
+
+    data
+}
+
+fn prepend_marker(marker: u8, data: Vec<u8>) -> Vec<u8> {
+    let mut data = data;
+    let mut new_data = Vec::with_capacity(data.len() + 2);
+    new_data.push(0xFF);
+    new_data.push(marker);
+    new_data.append(&mut data);
+    new_data
+}
+
+fn write_quantization_table(table_id: u8, table: &[i32; 64]) -> Vec<u8> {
+    let mut data = vec![0u8; 67];
+    
+    let data_length = data.len();
+    BigEndian::write_u16(&mut data[0..2], data_length as u16);
+
+    data[2] = table_id; // entry length is 0
+
+    let zigzaged = zigzag(&table);
+    for entry_index in 0..zigzaged.len() {
+        data[entry_index + 3] = zigzaged[entry_index] as u8;
+    }
+    
+    data
 }
 
 fn zigzag(values: &[i32; 64]) -> [i32; 64] {
@@ -176,15 +255,24 @@ mod tests {
         let image_data = read("assets/bridge.jpg")
             .expect("failed to load test image");
         
+        info!("reading test image");
         let reader = JPEGReader::new();
         let images = reader.read(&image_data)
             .expect("failed to read test image");
         let image = &images[0];
+        info!("done reading test image");
 
         let writer = JPEGWriter::new();
         let new_image_data = writer.write(&image, &ImageWriterOptions::default())
             .expect("failed to write image");
 
         std::fs::write("assets/test.jpg", &new_image_data);
+
+        info!("reading new image");
+        let new_images = reader.read(&new_image_data)
+            .expect("failed to read new image");
+        let new_image = &new_images[0];
+
+        assert_eq!(image.pixels, new_image.pixels);
     }
 }

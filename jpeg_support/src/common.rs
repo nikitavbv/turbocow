@@ -11,6 +11,14 @@ pub struct DIBHeader {
     pub alpha_mask: u32,
 }
 
+#[derive(Clone)]
+pub struct Channel {
+    pub id: u8,
+    pub horizontal_sampling: u8,
+    pub vertical_sampling: u8,
+    pub quantization_table_id: u8,
+}
+
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Compression {
     Uncompressed,

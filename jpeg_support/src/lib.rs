@@ -10,6 +10,7 @@ extern crate log;
 extern crate custom_error;
 extern crate lazy_static;
 
+mod common;
 mod huffman;
 pub mod reader;
 pub mod writer;
