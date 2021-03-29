@@ -5,7 +5,7 @@ use std::{collections::HashMap, convert::TryInto};
 
 use byteorder::{BigEndian, ByteOrder};
 
-use crate::common::Channel;
+use crate::common::{Channel, HuffmanTable, HuffmanTableType};
 
 const QUANTIZATION_TABLE_Y: [i32; 64] = [
      3,  2,  2,  3,  4,  6,  8, 10, 
@@ -71,6 +71,28 @@ impl ImageWriter for JPEGWriter {
         }
 
         // dct, quantization, zigzaging
+        let mut huffman_tables: Vec<HuffmanTable> = vec![
+            HuffmanTable {
+                id: 0,
+                table_type: HuffmanTableType::DC,
+                table: HashMap::new(),
+            },
+            HuffmanTable {
+                id: 1,
+                table_type: HuffmanTableType::DC,
+                table: HashMap::new(),
+            },
+            HuffmanTable {
+                id: 0,
+                table_type: HuffmanTableType::AC,
+                table: HashMap::new(),
+            },
+            HuffmanTable {
+                id: 1,
+                table_type: HuffmanTableType::DC,
+                table: HashMap::new(),
+            }
+        ];
         let mut channels: HashMap<u8, Vec<[i32; 64]>> = HashMap::with_capacity(3);
         for channel in 0..3 {
             let quantization_table = quantization_tables[&quantization_table_by_channel[&(channel + 1)]];

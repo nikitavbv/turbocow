@@ -7,7 +7,7 @@ use bit_vec::BitVec;
 use core::models::{image::Image, pixel::Pixel, io::{ImageIOError, ImageReader}};
 use std::collections::HashMap;
 
-use crate::{common::Channel, huffman::HuffmanTree};
+use crate::{common::{Channel, HuffmanTable, HuffmanTableType}, huffman::HuffmanTree};
 
 // see:
 // https://habr.com/ru/post/102521/
@@ -136,20 +136,6 @@ impl JPEG {
 struct QuantizationTable {
     id: u8,
     data: [i32; 64],
-}
-
-#[derive(Clone)]
-struct HuffmanTable {
-
-    id: u8,
-    table_type: HuffmanTableType,
-    table: HashMap<(u16, u16), u8>,
-}
-
-#[derive(Clone, PartialEq)]
-enum HuffmanTableType {
-    DC,
-    AC
 }
 
 impl ImageReader for JPEGReader {
@@ -551,6 +537,8 @@ fn read_huffman_table(data: &[u8]) -> Result<(HuffmanTable, usize), JPEGReaderEr
             offset += 1;
         }
     }
+
+    trace!("read huffman table, id = {}, type = {:?}, length = {}", table_id, table_type, tree.to_map().len());
 
     Ok((HuffmanTable {
         id: table_id,
