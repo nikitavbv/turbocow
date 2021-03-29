@@ -9,6 +9,7 @@ use writer::JPEGWriter;
 extern crate log;
 extern crate custom_error;
 extern crate lazy_static;
+extern crate maplit;
 
 mod common;
 mod huffman;

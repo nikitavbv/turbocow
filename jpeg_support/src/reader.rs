@@ -7,7 +7,7 @@ use bit_vec::BitVec;
 use core::models::{image::Image, pixel::Pixel, io::{ImageIOError, ImageReader}};
 use std::collections::HashMap;
 
-use crate::{common::{Channel, HuffmanTable, HuffmanTableType}, huffman::HuffmanTree};
+use crate::{common::{Channel, HuffmanTable, HuffmanTableType}, huffman::HuffmanTree, common::ycbcr_to_rgb};
 
 // see:
 // https://habr.com/ru/post/102521/
@@ -280,7 +280,7 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                     .ok_or(JPEGReaderError::InvalidEncodedData {
                         description: format!("DC Huffman table with id = {} is not present", channel_id)
                     })?.table;
-                let ac_huffman_table = jpeg.huffman_table_by_type(HuffmanTableType::AC ,huffman_ac_by_channel[&(channel_id as u8)])
+                let ac_huffman_table: HashMap<(u16, u16), u8> = jpeg.huffman_table_by_type(HuffmanTableType::AC ,huffman_ac_by_channel[&(channel_id as u8)])
                     .ok_or(JPEGReaderError::InvalidEncodedData {
                         description: format!("DC Huffman table with id = {} is not present", channel_id)
                     })?.table;
@@ -320,6 +320,7 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                                             factor = factor - 2i32.pow(value as u32) + 1;
                                         }
 
+                                        // trace!("read dc value: {}", factor);
                                         factor_vals[factor_offset] = factor;
                                         factor_offset += 1;
                                     }
@@ -353,6 +354,7 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                                             factor = factor - 2i32.pow(factor_length as u32) + 1;
                                         }
                     
+                                        //trace!("read ac value: {}", factor);
                                         factor_vals[factor_offset] = factor;
                                         factor_offset += 1;
                                     }
@@ -378,8 +380,10 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                 // discrete cosine transform
                 let matrices: Vec<[i32; 64]> = matrices.iter()
                     .map(|m| multiply_64(&m, &quantization_table))
-                    .map(|m| perform_dct(&m))
+                    .map(|m| dct_decode(&m))
                     .collect();
+                
+                trace!("matrices after everything: {:?}", matrices);
 
                 // how many pixels should each unit take
                 let v_ratio = max_vertical_sampling / channel.vertical_sampling;
@@ -443,13 +447,6 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
     Ok((jpeg, block_length + 2 + data_length))
 }
 
-fn ycbcr_to_rgb(y: i32, cb: i32, cr: i32) -> (u8, u8, u8) {
-    let r = ((y as f32 + 1.402 * (cr as f32 - 128.0)).round() as i32).max(0).min(255) as u8;
-    let g = ((y as f32 - 0.34414 * (cb as f32 - 128.0) - 0.71414 * (cr as f32 - 128.0)).round() as i32).max(0).min(255) as u8;
-    let b = ((y as f32 + 1.772 * (cb as f32 - 128.0)).round() as i32).max(0).min(255) as u8;
-    (r, g, b)
-}
-
 fn precompute_dct() -> [f32; 4096] {
     let mut res = [0f32; 4096];
 
@@ -470,7 +467,7 @@ fn precompute_dct() -> [f32; 4096] {
     res
 }
 
-fn perform_dct(matrix: &[i32; 64]) -> [i32; 64] {
+pub(crate) fn dct_decode(matrix: &[i32; 64]) -> [i32; 64] {
     let mut result  = [0f32; 8 * 8];
 
     for y in 0..8 {
@@ -515,6 +512,8 @@ fn multiply_64(a: &[i32; 64], b: &[i32; 64]) -> [i32; 64] {
 }
 
 fn read_huffman_table(data: &[u8]) -> Result<(HuffmanTable, usize), JPEGReaderError> {
+    trace!("reading huffman table");
+    
     let block_length = BigEndian::read_u16(&data[0..2]) as usize;
     let data = &data[2..];
 
@@ -538,8 +537,6 @@ fn read_huffman_table(data: &[u8]) -> Result<(HuffmanTable, usize), JPEGReaderEr
         }
     }
 
-    trace!("read huffman table, id = {}, type = {:?}, length = {}", table_id, table_type, tree.to_map().len());
-
     Ok((HuffmanTable {
         id: table_id,
         table_type: table_type,
@@ -548,6 +545,8 @@ fn read_huffman_table(data: &[u8]) -> Result<(HuffmanTable, usize), JPEGReaderEr
 }
 
 fn read_baseline_dct(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGReaderError> {
+    trace!("reading baseline dct");   
+   
     let block_length = BigEndian::read_u16(&data[0..2]) as usize;
     let data = &data[2..];
 
