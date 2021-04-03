@@ -377,13 +377,13 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                     })?
                     .data;
                 
-                // discrete cosine transform
+                // discrete cosine transform                
                 let matrices: Vec<[i32; 64]> = matrices.iter()
                     .map(|m| multiply_64(&m, &quantization_table))
-                    .map(|m| dct_decode(&m))
+                    //.map(|m| dct_decode(&m))
                     .collect();
                 
-                trace!("matrices after everything: {:?}", matrices);
+                trace!("matrices before multiply and dct: {:?}", matrices);
 
                 // how many pixels should each unit take
                 let v_ratio = max_vertical_sampling / channel.vertical_sampling;

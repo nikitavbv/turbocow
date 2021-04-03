@@ -409,6 +409,9 @@ lazy_static! {
         216 => (65514, 16),
         231 => (65522, 16),
     };
+
+    // For DCT
+    static ref COS_TABLE: [f32; 64] = precompute_cos_table();
 }
 
 pub struct JPEGWriter {
@@ -456,8 +459,33 @@ impl ImageWriter for JPEGWriter {
             3 => Vec::new(),
         };
 
-        // TODO: image to mcus
         // given image, transform it into multiple blocks 8x8.
+        let mcus: Vec<[Pixel; 64]> = image_to_mcus(&image);
+        let mut pixels_ycbcr: Vec<[[i32; 3]; 64]> = Vec::with_capacity(mcus.len());
+        for mcu in mcus {
+            let mut mcu_pixels = [[0i32; 3]; 64];
+
+            for i in 0..mcu_pixels.len() {
+                let ycbcr = rgb_to_ycbcr(&mcu[i]);
+                mcu_pixels[i] = [ycbcr.0, ycbcr.1, ycbcr.2];
+            }
+
+            for channel in 0..mcu_pixels[0].len() {
+                let quantization_table_id = quantization_table_by_channel[&((channel + 1) as u8)];
+                let quantization_table = quantization_tables[&quantization_table_id];
+
+                let channel = extract_channel(&mcu_pixels, channel);
+                trace!("before: {:?}", channel);
+                let channel = dct_encode(&channel);
+                // let channel = zigzag(&channel);
+                //let channel = divide_64s(&channel, &quantization_table);
+                trace!("writing channel: {:?}", channel);
+            }
+
+            pixels_ycbcr.push(mcu_pixels);
+        }
+
+        // ---
 
         // image pixels to ycbcr
         let mut pixels_ycbcr: Vec<[i32; 3]> = Vec::with_capacity(image.width * image.height);
@@ -716,24 +744,75 @@ fn dct_encode(values: &[i32; 64]) -> [i32; 64] {
     }
     let values = new_values;
 
-
     let mut result = [0i32; 64];
 
-    for v in 0..7 {
-        for u in 0..7 {
+    for u in 0..8 {
+        for v in 0..8 {
             let mut sum = 0 as f32;
 
-            for y in 0..7 {
-                for x in 0..7 {
-                    sum += values[y * 8 + x] as f32 
+            for y in 0..8 {
+                for x in 0..8 {
+                    /*sum += values[y * 8 + x] as f32 
                         * (((2 * x + 1) * v) as f32 * PI / 16.0).cos() 
-                        * (((2 * y + 1) * u) as f32 * PI / 16.0).cos();
+                        * (((2 * y + 1) * u) as f32 * PI / 16.0).cos();*/
+                    let c = (values[y * 8 + x] as f32) * COS_TABLE[y * 8 + u] * COS_TABLE[x * 8 + v];
+                    println!("| {} {} {} {}", values[y * 8 + x], COS_TABLE[y * 8 + u], COS_TABLE[x * 8 + v], sum);
+                    sum += c;
                 }
             }
 
             let cu = if u == 0 { 1.0/2f32.sqrt() } else { 1.0 };
             let cv = if v == 0 { 1.0/2f32.sqrt() } else { 1.0 };
-            result[v * 8 + u] = (sum * cu * cv / 4.0).round() as i32;
+            result[u * 8 + v] = (sum * cu * cv / 4.0).round() as i32;
+        }
+    }
+
+    result
+}
+
+fn precompute_cos_table() -> [f32; 64] {
+    let mut result = [0f32; 64];
+
+    for i in 0..8 {
+        for j in 0..8 {
+            result[i * 8 + j] = (((2 * i + 1) * j) as f32 * PI / 16.0).cos()
+        }
+    }
+
+    result
+}
+
+fn extract_channel(pixels: &[[i32; 3]; 64], channel_index: usize) -> [i32; 64] {
+    let mut channel = [0i32; 64];
+
+    for i in 0..pixels.len() {
+        channel[i] = pixels[i][channel_index];
+    }
+
+    channel
+}
+
+fn image_to_mcus(image: &Image) -> Vec<[Pixel; 64]> {
+    let mut mcus = Vec::new();
+
+    for y in 0..(image.height as f32 / 8.0).ceil() as usize {
+        for x in 0..(image.width as f32 / 8.0).ceil() as usize {
+            mcus.push(image_mcu(&image, x, y));
+        }
+    }
+
+    mcus
+}
+
+fn image_mcu(image: &Image, y: usize, x: usize) -> [Pixel; 64] {
+    let mut result = [Pixel::black(); 64];
+    
+    let offset_x = x * 8;
+    let offset_y = y * 8;
+
+    for y in 0..8 {
+        for x in 0..8 {
+            result[y * 8 + x] = image.get_pixel(offset_x + x, offset_y + y);
         }
     }
 
@@ -815,7 +894,6 @@ mod tests {
 
     #[test]
     fn test_dct_encode() {
-        // TODO: fix dct encode
         let source = [
             78, 76, 81, 83, 78, 79, 82, 79, 77, 76, 80, 82, 78, 79, 82, 81, 79, 78, 81, 82, 79, 80, 
             82, 82, 81, 81, 82, 82, 80, 81, 82, 82, 80, 81, 81, 80, 81, 81, 82, 83, 77, 80, 79, 79, 
@@ -830,6 +908,31 @@ mod tests {
             diff += (source[i] - decoded[i]).abs();
         }
 
-        assert!(diff < 1000);
+        assert!(diff < 50);
+    }
+
+    #[test]
+    fn test_dct_encode_simple_block() {
+        let source = [
+            234, 212, 153, 111, 110, 153, 209, 224, 235, 207, 134, 79, 73, 119, 188, 216, 238, 206, 121, 
+            50, 39, 86, 162, 207, 248, 216, 133, 64, 53, 95, 164, 214, 248, 227, 165, 115, 110, 140, 190, 
+            230, 207, 201, 179, 162, 167, 184, 205, 224, 121, 135, 160, 182, 197, 201, 194, 190, 49, 78, 
+            135, 185, 207, 202, 176, 156
+        ];
+    
+        let expected_encoded = [
+            288, -16, 262, -12, -25, -8, -10, 0, -30, 116, 246, -4, -20, 0, -12, 0, -3, -105, -162, 15, 0, 
+            11, 0, 0, 135, 9, -4, 6, 0, 0, 0, 0, -8, -4, -7, 0, 0, 0, 0, 0, -5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ];
+
+        let encoded = dct_encode(&source);
+        
+        let mut diff = 0;
+        for i in 0..64 {
+            diff += (expected_encoded[i] - encoded[i]).abs();
+        }
+
+        assert!(diff < 50);
     }
 }
