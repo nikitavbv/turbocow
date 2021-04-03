@@ -320,7 +320,7 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                                             factor = factor - 2i32.pow(value as u32) + 1;
                                         }
 
-                                        // trace!("read dc value: {}", factor);
+                                        trace!("read dc value: {}", factor);
                                         factor_vals[factor_offset] = factor;
                                         factor_offset += 1;
                                     }
@@ -377,14 +377,12 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                     })?
                     .data;
                 
-                // discrete cosine transform                
+                // discrete cosine transform 
                 let matrices: Vec<[i32; 64]> = matrices.iter()
                     .map(|m| multiply_64(&m, &quantization_table))
-                    //.map(|m| dct_decode(&m))
+                    .map(|m| dct_decode(&m))
                     .collect();
                 
-                trace!("matrices before multiply and dct: {:?}", matrices);
-
                 // how many pixels should each unit take
                 let v_ratio = max_vertical_sampling / channel.vertical_sampling;
                 let h_ratio = max_horizontal_sampling / channel.horizontal_sampling;

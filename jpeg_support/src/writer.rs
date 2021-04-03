@@ -453,15 +453,11 @@ impl ImageWriter for JPEGWriter {
             3 => 1,
         };
 
-        let mut channel_data: HashMap<u8, Vec<Vec<u8>>> = hashmap! {
-            1 => Vec::new(),
-            2 => Vec::new(),
-            3 => Vec::new(),
-        };
-
         // given image, transform it into multiple blocks 8x8.
         let mcus: Vec<[Pixel; 64]> = image_to_mcus(&image);
         let mut pixels_ycbcr: Vec<[[i32; 3]; 64]> = Vec::with_capacity(mcus.len());
+        let mut prev_dc = vec![0; 3];
+        let mut image_data: Vec<u8> = Vec::new();
         for mcu in mcus {
             let mut mcu_pixels = [[0i32; 3]; 64];
 
@@ -471,68 +467,34 @@ impl ImageWriter for JPEGWriter {
             }
 
             for channel in 0..mcu_pixels[0].len() {
-                let quantization_table_id = quantization_table_by_channel[&((channel + 1) as u8)];
+                let channel_id = channel + 1;
+                let quantization_table_id = quantization_table_by_channel[&(channel_id as u8)];
                 let quantization_table = quantization_tables[&quantization_table_id];
 
+                let huffman_table_id = huffman_table_id_by_channel[&(channel_id as u8)];
+                let dc_huffman_table: &HashMap<u16, (i32, u8)> = &huffman_tables[&(HuffmanTableType::DC, huffman_table_id)];
+                let ac_huffman_table: &HashMap<u16, (i32, u8)> = &huffman_tables[&(HuffmanTableType::AC, huffman_table_id)];    
+
                 let channel = extract_channel(&mcu_pixels, channel);
-                trace!("before: {:?}", channel);
                 let channel = dct_encode(&channel);
-                // let channel = zigzag(&channel);
-                //let channel = divide_64s(&channel, &quantization_table);
-                trace!("writing channel: {:?}", channel);
-            }
-
-            pixels_ycbcr.push(mcu_pixels);
-        }
-
-        // ---
-
-        // image pixels to ycbcr
-        let mut pixels_ycbcr: Vec<[i32; 3]> = Vec::with_capacity(image.width * image.height);
-        for y in 0..image.height {
-            for x in 0..image.width {
-                let ycbcr = rgb_to_ycbcr(&image.get_pixel(x, y));
-                pixels_ycbcr.push([ycbcr.0, ycbcr.1, ycbcr.2]);
-            }
-        }
-
-        // dct, quantization, zigzaging
-        for channel in 0..3 {
-            let channel_id = channel + 1;
-            
-            let huffman_table_id = huffman_table_id_by_channel[&channel_id];
-            let dc_huffman_table: &HashMap<u16, (i32, u8)> = &huffman_tables[&(HuffmanTableType::DC, huffman_table_id)];
-            let ac_huffman_table: &HashMap<u16, (i32, u8)> = &huffman_tables[&(HuffmanTableType::AC, huffman_table_id)];
-
-            let quantization_table = quantization_tables[&quantization_table_by_channel[&channel_id]];
-
-            let channel_values: Vec<i32> = pixels_ycbcr.iter().map(|v| v[channel as usize]).collect();
-            trace!("channel values without split are: {:?}", channel_values.clone());
-            //trace!("channel values are: {:?}", split_into_mcus(channel_values.clone()));
-
-            let mut channel_values: Vec<[i32; 64]> = split_into_mcus(channel_values).iter()
-                .map(|mcu| dct_encode(&mcu))
-                .map(|mcu| divide_64s(&mcu, &quantization_table))
-                .map(|mcu| zigzag(&mcu))
-                .collect();
-
-            // dc delta
-            // also, huffman encode here and store to some Vec
-            let total_channel_values = channel_values.len();
-            for i in 0..(total_channel_values-1) {
-                channel_values[total_channel_values - 1 - i][0] -= channel_values[total_channel_values - 2 - i][0];
+                let channel = divide_64s(&channel, &quantization_table);
+                let mut channel = zigzag(&channel);
                 
-                let channel_value = channel_values[total_channel_values - 1 - i];
+                channel[0] = channel[0] - prev_dc[channel_id - 1];
+                prev_dc[channel_id - 1] = channel[0];
 
                 let mut block_data = BitVec::new();
-                write_factor(&mut block_data, dc_huffman_table, channel_value[0]);
+                trace!("writing dc value: {}", channel[0]);
+                write_factor(&mut block_data, dc_huffman_table, channel[0]);
                 for i in 1..64 {
-                    let ac = channel_value[i];
+                    let ac = channel[i];
                     write_factor(&mut block_data, ac_huffman_table, ac);
                 }
 
-                channel_data.get_mut(&channel_id).unwrap().push(block_data.to_bytes());
+                image_data.append(&mut block_data.to_bytes());
             }
+
+            pixels_ycbcr.push(mcu_pixels);
         }
 
         let channels: Vec<Channel> = (0..3).map(|i| {
@@ -564,20 +526,8 @@ impl ImageWriter for JPEGWriter {
         data.append(&mut prepend_marker(0xC4, write_huffman_table(HuffmanTableType::AC, 0, &AC_HUFFAN_Y)));
         data.append(&mut prepend_marker(0xC4, write_huffman_table(HuffmanTableType::AC, 1, &AC_HUFFAN_CBCR)));
 
-        // combine here encoded Vecs into one data block
-        let mut blocks: Vec<Vec<u8>> = Vec::new();
-        let total_blocks = channel_data[&1].len();
-        for i in 0..total_blocks {
-            let mut combined: Vec<u8> = Vec::new();
-            for channel in 1..channels.len()+1 {
-                let mut part = channel_data[&(channel as u8)][i].clone();
-                combined.append(&mut part);
-            }
-
-            blocks.push(combined);
-        }
         // start of scan
-        data.append(&mut prepend_marker(0xDA, write_start_of_scan(blocks)));
+        data.append(&mut prepend_marker(0xDA, write_start_of_scan(image_data)));
 
         // end of data
         data.append(&mut prepend_marker(0xD9, Vec::new()));
@@ -586,7 +536,9 @@ impl ImageWriter for JPEGWriter {
     }
 }
 
-fn write_start_of_scan(blocks: Vec<Vec<u8>>) -> Vec<u8> {
+fn write_start_of_scan(data: Vec<u8>) -> Vec<u8> {
+    let mut flat_data = data;
+
     let mut data = Vec::new();
     // reserved for length:
     data.push(0);
@@ -606,7 +558,6 @@ fn write_start_of_scan(blocks: Vec<Vec<u8>>) -> Vec<u8> {
     data.push(3); // channel id
     data.push(1 << 4 | 1); // huffman tables ids
 
-    let mut flat_data: Vec<u8> = blocks.iter().flat_map(|v| v.iter()).map(|v| *v).collect();
     while flat_data.len() > 0 {
         let bytes_to_copy = flat_data.len().min(254);
         data.push(bytes_to_copy as u8);
@@ -752,12 +703,7 @@ fn dct_encode(values: &[i32; 64]) -> [i32; 64] {
 
             for y in 0..8 {
                 for x in 0..8 {
-                    /*sum += values[y * 8 + x] as f32 
-                        * (((2 * x + 1) * v) as f32 * PI / 16.0).cos() 
-                        * (((2 * y + 1) * u) as f32 * PI / 16.0).cos();*/
-                    let c = (values[y * 8 + x] as f32) * COS_TABLE[y * 8 + u] * COS_TABLE[x * 8 + v];
-                    println!("| {} {} {} {}", values[y * 8 + x], COS_TABLE[y * 8 + u], COS_TABLE[x * 8 + v], sum);
-                    sum += c;
+                    sum += (values[y * 8 + x] as f32) * COS_TABLE[y * 8 + u] * COS_TABLE[x * 8 + v];
                 }
             }
 
