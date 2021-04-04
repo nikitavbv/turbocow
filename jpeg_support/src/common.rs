@@ -128,42 +128,10 @@ pub fn write_huffman_encoded_channels_data(
     for mcu in data {
         for channel_id in 1..=(mcu.len() as ChannelID) {
             let channel = mcu[channel_id as usize - 1];
-            let dc_huffman_table: &HashMap<u8, (u16, u16)> = &huffman_tables[&(HuffmanTableType::DC, channel_id)].vk_table();
-            let ac_huffman_table: &HashMap<u8, (u16, u16)> = &huffman_tables[&(HuffmanTableType::AC, channel_id)].vk_table();
+            let dc_huffman_table = &huffman_tables[&(HuffmanTableType::DC, channel_id)];
+            let ac_huffman_table = &huffman_tables[&(HuffmanTableType::AC, channel_id)];
 
-            let mut channel = zigzag(&channel);
-              
-            let prev_value = channel[0];
-            channel[0] = channel[0] - prev_dc[channel_id as usize - 1];
-            prev_dc[channel_id as usize - 1] = prev_value;
-
-            write_factor(&mut block_data, dc_huffman_table, channel[0], 0);
-
-            let mut offset = 1;
-            while offset < 64 {
-                let mut following_zeros = 0;
-                while offset + following_zeros < 64 {
-                    if channel[offset + following_zeros] == 0 {
-                        following_zeros += 1;
-                    } else {
-                        break;
-                    }
-                }
-
-                if offset + following_zeros == 64 {
-                    write_factor(&mut block_data, ac_huffman_table, 0, 0);
-                    break;
-                }
-
-                following_zeros = following_zeros.min(15);
-                offset += following_zeros;
-
-                let ac = channel[offset];
-
-                write_factor(&mut block_data, ac_huffman_table, ac, following_zeros as u8);
-
-                offset += 1;
-            }
+            write_huffman_encoded_matrix(&mut block_data, &mut prev_dc, &dc_huffman_table, &ac_huffman_table, channel_id, &channel);
         }
     }
 
@@ -172,6 +140,53 @@ pub fn write_huffman_encoded_channels_data(
     }
 
     block_data.to_bytes()
+}
+
+fn write_huffman_encoded_matrix(
+    block_data: &mut BitVec, 
+    prev_dc: &mut [i32; 3],
+    dc_huffman_table: &HuffmanTable,
+    ac_huffman_table: &HuffmanTable,
+    channel_id: ChannelID, 
+    channel: &[i32; 64]
+) {
+    let dc_huffman_table = dc_huffman_table.vk_table();
+    let ac_huffman_table = ac_huffman_table.vk_table();
+
+    //println!("write matrix: {:?}", channel);
+    let mut channel = zigzag(&channel);
+
+    let prev_value = channel[0];
+    channel[0] = channel[0] - prev_dc[channel_id as usize - 1];
+    prev_dc[channel_id as usize - 1] = prev_value;
+
+    write_factor(block_data, &dc_huffman_table, channel[0], 0);
+
+    let mut offset = 1;
+    while offset < 64 {
+        let mut following_zeros = 0;
+        while offset + following_zeros < 64 {
+            if channel[offset + following_zeros] == 0 {
+                following_zeros += 1;
+            } else {
+                break;
+            }
+        }
+
+        if offset + following_zeros == 64 {
+            write_factor(block_data, &ac_huffman_table, 0, 0);
+            break;
+        }
+
+        following_zeros = following_zeros.min(15);
+        offset += following_zeros;
+
+        let ac = channel[offset];
+
+        write_factor(block_data, &ac_huffman_table, ac, following_zeros as u8);
+
+        offset += 1;
+    }
 }
 
 fn write_factor(output_bitvec: &mut BitVec, huffman_table: &HashMap<u8, (u16, u16)>, factor: i32, following_zeros: u8) {
@@ -221,105 +236,136 @@ pub fn read_huffman_encoded_channels_data(
     let total_channels = channels.len();
 
     let mut result = Vec::new();
-    let mut prev_dc = vec![0; total_channels as usize];
+    let mut prev_dc = [0i32; 3];
     let mut offset = 0;
 
     for _ in 0..total_mcus {
         for channel_id in 1..=(total_channels as ChannelID) {
             let channel = &channels[&channel_id];
 
-            let dc_huffman_table: &HashMap<(u16, u16), u8> = &huffman_tables_by_channel[&(HuffmanTableType::DC, channel_id)].table;
-            let ac_huffman_table: &HashMap<(u16, u16), u8> = &huffman_tables_by_channel[&(HuffmanTableType::AC, channel_id)].table;
-
-            let mut bitgroup = 0;
-            let mut bitgroup_length = 0;
+            let dc_huffman_table = &huffman_tables_by_channel[&(HuffmanTableType::DC, channel_id)];
+            let ac_huffman_table = &huffman_tables_by_channel[&(HuffmanTableType::AC, channel_id)];
 
             for _ in 0..channel.vertical_sampling {
                 for _ in 0..channel.horizontal_sampling {
-                    let mut dc_factor_read = false;
-                    let mut factor_vals: [i32; 64] = [0i32; 64];
-                    let mut factor_offset = 0;
+                    let (matrix, new_offset) = read_huffman_encoded_matrix(
+                        &bitvec, 
+                        offset, 
+                        &mut prev_dc, 
+                        channel_id, 
+                        &dc_huffman_table, 
+                        &ac_huffman_table
+                    );
 
-                    while factor_offset < 64 {
-                        bitgroup = (bitgroup << 1) | (if bitvec[offset] { 1 } else { 0 });
-                        offset += 1;
-                        bitgroup_length += 1;
-
-                        if !dc_factor_read {
-                            if dc_huffman_table.contains_key(&(bitgroup, bitgroup_length)) {
-                                let value = dc_huffman_table[&(bitgroup, bitgroup_length)];
-                                bitgroup = 0;
-                                bitgroup_length = 0;
-                
-                                if value == 0 {
-                                    factor_offset += 1;
-                                } else {
-                                    let mut factor: i32 = 0;
-                                    let mut first_bit_is_one = false;
-                                    for i in 0..value {
-                                        if i == 0 {
-                                            first_bit_is_one = bitvec[offset];
-                                        }
-                                        
-                                        factor = (factor << 1) | (if bitvec[offset] { 1 } else { 0 });
-                                        offset += 1;
-                                    }
-                
-                                    if !first_bit_is_one {
-                                        factor = factor - 2i32.pow(value as u32) + 1;
-                                    }
-
-                                    factor_vals[factor_offset] = factor;
-                                    factor_offset += 1;
-                                }
-                                dc_factor_read = true;
-                            }
-                        } else {
-                            if ac_huffman_table.contains_key(&(bitgroup, bitgroup_length)) {
-                                let value = ac_huffman_table[&(bitgroup, bitgroup_length)];
-                                bitgroup = 0;
-                                bitgroup_length = 0;
-                
-                                if value == 0 {
-                                    factor_offset = 64;
-                                } else {
-                                    let number_of_zeros = value >> 4;
-                                    let factor_length = value & 0b1111;
-                                    factor_offset += number_of_zeros as usize;
-                
-                                    let mut factor: i32 = 0;
-                                    let mut first_bit_is_one = false;
-                                    for i in 0..factor_length {
-                                        if i == 0 {
-                                            first_bit_is_one = bitvec[offset];
-                                        }
-                                        
-                                        factor = (factor << 1) | (if bitvec[offset] { 1 } else { 0 });
-                                        offset += 1;
-                                    }
-
-                                    if !first_bit_is_one {
-                                        factor = decode_negative(factor, factor_length);
-                                    }
-                
-                                    factor_vals[factor_offset] = factor;
-                                    factor_offset += 1;
-                                }
-                            }
-                        }
-
-                        if factor_offset == 64 {
-                            factor_vals[0] += prev_dc[channel_id as usize - 1];
-                            prev_dc[channel_id as usize - 1] = factor_vals[0];
-                            result.push(unzigzag_64(&factor_vals));
-                        }
-                    }
+                    result.push(matrix);
+                    offset = new_offset;
                 }
             }
         }
     }
 
     Ok(result)
+}
+
+fn read_huffman_encoded_matrix(
+    bitvec: &BitVec, 
+    offset: usize, 
+    prev_dc: &mut [i32; 3], 
+    channel_id: ChannelID,
+    dc_huffman_table: &HuffmanTable,
+    ac_huffman_table: &HuffmanTable
+) -> ([i32; 64], usize) {
+    let dc_huffman_table = &dc_huffman_table.table;
+    let ac_huffman_table = &ac_huffman_table.table;
+
+    let mut offset = offset;
+    
+    let mut bitgroup = 0;
+    let mut bitgroup_length = 0;
+
+    let mut dc_factor_read = false;
+    let mut factor_vals: [i32; 64] = [0i32; 64];
+    let mut factor_offset = 0;
+
+    while factor_offset < 64 {
+        bitgroup = (bitgroup << 1) | (if bitvec[offset] { 1 } else { 0 });
+        offset += 1;
+        bitgroup_length += 1;
+
+        if !dc_factor_read {
+            if dc_huffman_table.contains_key(&(bitgroup, bitgroup_length)) {
+                let value = dc_huffman_table[&(bitgroup, bitgroup_length)];
+                bitgroup = 0;
+                bitgroup_length = 0;
+
+                if value == 0 {
+                    factor_offset += 1;
+                } else {
+                    let mut factor: i32 = 0;
+                    let mut first_bit_is_one = false;
+                    for i in 0..value {
+                        if i == 0 {
+                            first_bit_is_one = bitvec[offset];
+                        }
+                        
+                        factor = (factor << 1) | (if bitvec[offset] { 1 } else { 0 });
+                        offset += 1;
+                    }
+
+                    if !first_bit_is_one {
+                        factor = factor - 2i32.pow(value as u32) + 1;
+                    }
+
+                    factor_vals[factor_offset] = factor;
+                    factor_offset += 1;
+                }
+                dc_factor_read = true;
+            }
+        } else {
+            if ac_huffman_table.contains_key(&(bitgroup, bitgroup_length)) {
+                let value = ac_huffman_table[&(bitgroup, bitgroup_length)];
+                bitgroup = 0;
+                bitgroup_length = 0;
+
+                if value == 0 {
+                    factor_offset = 64;
+                } else {
+                    let number_of_zeros = value >> 4;
+                    let factor_length = value & 0b1111;
+                    factor_offset += number_of_zeros as usize;
+
+                    let mut factor: i32 = 0;
+                    let mut first_bit_is_one = false;
+                    for i in 0..factor_length {
+                        if i == 0 {
+                            first_bit_is_one = bitvec[offset];
+                        }
+                        
+                        factor = (factor << 1) | (if bitvec[offset] { 1 } else { 0 });
+                        offset += 1;
+                    }
+
+                    if !first_bit_is_one {
+                        factor = decode_negative(factor, factor_length);
+                    }
+
+                    factor_vals[factor_offset] = factor;
+                    factor_offset += 1;
+                }
+            }
+        }
+
+        if factor_offset == 64 {
+            break;
+        }
+    }
+
+    factor_vals[0] += prev_dc[channel_id as usize - 1];
+    prev_dc[channel_id as usize - 1] = factor_vals[0];
+    let matrix = unzigzag_64(&factor_vals);
+    //println!("read matrix: {:?}", matrix);
+
+    (matrix, offset)
 }
 
 fn encode_negative(number: i32) -> (i32, u8) {
@@ -380,6 +426,15 @@ pub fn escape_image_data(data: &[u8]) -> Vec<u8> {
 mod tests {
     
     use super::*;
+    use crate::writer::{AC_HUFFAN_Y, DC_HUFFMAN_Y};
+
+    #[test]
+    fn test_black_to_ycbcr() {
+        let ycbcr = rgb_to_ycbcr(&Pixel::from_rgb(0, 0, 0));
+        let rgb = ycbcr_to_rgb(ycbcr.0, ycbcr.1, ycbcr.2);
+
+        assert_eq!(rgb, (0, 0, 0));
+    }
 
     #[test]
     fn test_count_nonzero_digits_5() {
@@ -420,10 +475,45 @@ mod tests {
             117, 189, 199, 162, 122, 31
         ];
     
-        let (unescaped, offset) = unescape_image_data(&test_data_escaped).expect("Failed to unescape test image data");
+        let (unescaped, _) = unescape_image_data(&test_data_escaped).expect("Failed to unescape test image data");
 
         let escaped = escape_image_data(&unescaped);
 
         assert_eq!(escaped, test_data_escaped);
+    }
+
+    #[test]
+    fn test_encode_matrix() {
+        let matrix = [
+            -250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ];
+    
+        let mut encoded = BitVec::new();
+        let mut prev_dc = [0i32; 3];
+        let dc_huffman_table = HuffmanTable::from_vk(0, HuffmanTableType::DC, &DC_HUFFMAN_Y);
+        let ac_huffman_table = HuffmanTable::from_vk(0, HuffmanTableType::AC, &AC_HUFFAN_Y);
+
+        write_huffman_encoded_matrix(
+            &mut encoded, 
+            &mut prev_dc, 
+            &dc_huffman_table, 
+            &ac_huffman_table, 
+            1, 
+            &matrix
+        );
+
+        let mut prev_dc = [0i32; 3];
+
+        let (matrix_decoded, _) = read_huffman_encoded_matrix(
+            &encoded, 
+            0, 
+            &mut prev_dc, 
+            1, 
+            &dc_huffman_table, 
+            &ac_huffman_table
+        );
+
+        assert_eq!(matrix_decoded, matrix);
     }
 }

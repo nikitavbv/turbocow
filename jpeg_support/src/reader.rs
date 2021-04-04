@@ -180,7 +180,6 @@ fn read_segment(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGReaderErr
 
 fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGReaderError> {
     let block_length = BigEndian::read_u16(&data[0..2]) as usize;
-    trace!("reading start of scan with block length = {}", block_length);
     let data = &data[2..];
 
     let mut jpeg = jpeg.clone();
@@ -210,7 +209,7 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
     let _end_of_spectral_selection = data[1];
     let _successive_approximation_bit_position = data[2];
     let data = &data[3..];
-
+    
     let data = &data[0..data.len()-2];
     let (data, data_length) = unescape_image_data(&data)?;
 
@@ -438,9 +437,7 @@ fn read_huffman_table(data: &[u8]) -> Result<(HuffmanTable, usize), JPEGReaderEr
     }, block_length + 2))
 }
 
-fn read_baseline_dct(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGReaderError> {
-    trace!("reading baseline dct");   
-   
+fn read_baseline_dct(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGReaderError> {   
     let block_length = BigEndian::read_u16(&data[0..2]) as usize;
     let data = &data[2..];
 
@@ -492,8 +489,6 @@ fn read_baseline_dct(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRead
 }
 
 fn read_quantization_table(data: &[u8]) -> Result<(QuantizationTable, usize), JPEGReaderError> {
-    trace!("reading quantization table");
-
     let block_length = BigEndian::read_u16(&data[0..2]) as usize;
     let data = &data[2..];
 

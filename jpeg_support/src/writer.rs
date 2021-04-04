@@ -1,15 +1,14 @@
 use std::f32::consts::PI;
 
-use bit_vec::BitVec;
 use lazy_static::lazy_static;
 use maplit::hashmap;
 
 use core::models::{image::Image, pixel::Pixel, io::{ImageIOError, ImageWriter, ImageWriterOptions}};
-use std::{collections::HashMap, convert::TryInto};
+use std::{collections::HashMap};
 
 use byteorder::{BigEndian, ByteOrder};
 
-use crate::{common::{Channel, HuffmanTable, HuffmanTableType}, common::{ChannelID, HuffmanTableID, rgb_to_ycbcr}, common::write_huffman_encoded_channels_data, common::zigzag, huffman::HuffmanTreeBuilder, common::escape_image_data};
+use crate::{common::{Channel, HuffmanTable, HuffmanTableType}, common::{ChannelID, rgb_to_ycbcr}, common::write_huffman_encoded_channels_data, common::zigzag, common::escape_image_data};
 
 // These tables are used by GIMP when saving with 90% quality.
 const QUANTIZATION_TABLE_Y: [i32; 64] = [
@@ -39,7 +38,7 @@ const QUANTIZATION_TABLE_CB_CR: [i32; 64] = [
 // we will use the same approach. These tables are copied from GIMP when exporting at 90% quality.
 // Tables represented as value => (code, code_length).
 lazy_static! {
-    static ref DC_HUFFMAN_Y: HashMap<u8, (u16, u16)> = hashmap!{
+    pub static ref DC_HUFFMAN_Y: HashMap<u8, (u16, u16)> = hashmap!{
         11 => (510, 9),
         3 => (4, 3),
         9 => (126, 7),
@@ -69,7 +68,7 @@ lazy_static! {
         4 => (14, 4),
     };
 
-    static ref AC_HUFFAN_Y: HashMap<u8, (u16, u16)> = hashmap!{
+    pub static ref AC_HUFFAN_Y: HashMap<u8, (u16, u16)> = hashmap!{
         170 => (65487, 16),
         118 => (65457, 16),
         69 => (65432, 16),
@@ -435,11 +434,12 @@ impl ImageWriter for JPEGWriter {
             (HuffmanTableType::DC, 3) => HuffmanTable::from_vk(1, HuffmanTableType::DC, &DC_HUFFMAN_CBCR),
             (HuffmanTableType::AC, 1) => HuffmanTable::from_vk(0, HuffmanTableType::AC, &AC_HUFFAN_Y),
             (HuffmanTableType::AC, 2) => HuffmanTable::from_vk(1, HuffmanTableType::AC, &AC_HUFFAN_CBCR),
-            (HuffmanTableType::AC, 3) => HuffmanTable::from_vk(2, HuffmanTableType::AC, &AC_HUFFAN_CBCR),
+            (HuffmanTableType::AC, 3) => HuffmanTable::from_vk(1, HuffmanTableType::AC, &AC_HUFFAN_CBCR),
         };
 
         // given image, transform it into multiple blocks 8x8.
         let mcus: Vec<[Pixel; 64]> = image_to_mcus(&image);
+        trace!("total mcus: {}", mcus.len());
 
         let mut matrices: Vec<[[i32; 64]; 3]> = Vec::new();
         for mcu in mcus {
@@ -471,16 +471,15 @@ impl ImageWriter for JPEGWriter {
             &matrices,
             &huffman_tables_by_channel
         );
-        let image_data = escape_image_data(&image_data);
+        let image_data_encoded = escape_image_data(&image_data);
 
-        let channels: Vec<Channel> = (0..3).map(|i| {
-            let id  = i + 1;
-
+        let channels: Vec<Channel> = (1..=3).map(|id| {
             Channel {
                 id,
                 horizontal_sampling: 1,
                 vertical_sampling: 1,
-                quantization_table_id: *quantization_table_by_channel.get(&id).unwrap(),
+                quantization_table_id: *quantization_table_by_channel.get(&id)
+                    .expect("Expected quantization table to be present, because quatization tables were statically defined for 3 channels"),
             }
         }).collect();
 
@@ -497,13 +496,13 @@ impl ImageWriter for JPEGWriter {
             &channels
         )));
         // writing huffman tables
-        data.append(&mut prepend_marker(0xC4, write_huffman_table(HuffmanTableType::DC, 0, &DC_HUFFMAN_Y)));
-        data.append(&mut prepend_marker(0xC4, write_huffman_table(HuffmanTableType::DC, 1, &DC_HUFFMAN_CBCR)));
-        data.append(&mut prepend_marker(0xC4, write_huffman_table(HuffmanTableType::AC, 0, &AC_HUFFAN_Y)));
-        data.append(&mut prepend_marker(0xC4, write_huffman_table(HuffmanTableType::AC, 1, &AC_HUFFAN_CBCR)));
+        data.append(&mut prepend_marker(0xC4, write_huffman_table(HuffmanTableType::DC, 0)));
+        data.append(&mut prepend_marker(0xC4, write_huffman_table(HuffmanTableType::DC, 1)));
+        data.append(&mut prepend_marker(0xC4, write_huffman_table(HuffmanTableType::AC, 0)));
+        data.append(&mut prepend_marker(0xC4, write_huffman_table(HuffmanTableType::AC, 1)));
 
         // start of scan
-        data.append(&mut prepend_marker(0xDA, write_start_of_scan(image_data)));
+        data.append(&mut prepend_marker(0xDA, write_start_of_scan(image_data_encoded)));
 
         // end of data
         data.append(&mut prepend_marker(0xD9, Vec::new()));
@@ -534,17 +533,17 @@ fn write_start_of_scan(data: Vec<u8>) -> Vec<u8> {
     data.push(3); // channel id
     data.push(1 << 4 | 1); // huffman tables ids
 
-    while flat_data.len() > 0 {
-        let bytes_to_copy = flat_data.len().min(254);
-        data.push(bytes_to_copy as u8);
-        data.append(&mut flat_data.drain(0..bytes_to_copy).collect());
-    }
+    data.push(0); // start of spectral or predictor selection
+    data.push(0); // end of spectral selection
+    data.push(0); // successive approximation bhit position
+
+    data.append(&mut flat_data);
 
     data
 }
 
-fn write_huffman_table(table_type: HuffmanTableType, id: u8, table: &HashMap<u8, (u16, u16)>) -> Vec<u8> {
-    // TODO: do this correctly
+fn write_huffman_table(table_type: HuffmanTableType, id: u8) -> Vec<u8> {
+    // pre-encoded for static tables we use
     match (table_type, id) {
         (HuffmanTableType::DC, 0) => vec![0, 31, 0, 0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
         (HuffmanTableType::AC, 0) => vec![0, 181, 16, 0, 2, 1, 3, 3, 2, 4, 3, 5, 5, 4, 4, 0, 0, 1, 125, 1, 2, 3, 0, 4, 17, 5, 18, 33, 49, 65, 6, 19, 81, 97, 7, 34, 113, 20, 50, 129, 145, 161, 8, 35, 66, 177, 193, 21, 82, 209, 240, 36, 51, 98, 114, 130, 9, 10, 22, 23, 24, 25, 26, 37, 38, 39, 40, 41, 42, 52, 53, 54, 55, 56, 57, 58, 67, 68, 69, 70, 71, 72, 73, 74, 83, 84, 85, 86, 87, 88, 89, 90, 99, 100, 101, 102, 103, 104, 105, 106, 115, 116, 117, 118, 119, 120, 121, 122, 131, 132, 133, 134, 135, 136, 137, 138, 146, 147, 148, 149, 150, 151, 152, 153, 154, 162, 163, 164, 165, 166, 167, 168, 169, 170, 178, 179, 180, 181, 182, 183, 184, 185, 186, 194, 195, 196, 197, 198, 199, 200, 201, 202, 210, 211, 212, 213, 214, 215, 216, 217, 218, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250],
@@ -693,37 +692,18 @@ fn image_mcu(image: &Image, y: usize, x: usize) -> [Pixel; 64] {
     result
 }
 
-fn split_into_mcus(values: Vec<i32>) -> Vec<[i32; 64]> {
-    let mut result: Vec<[i32; 64]> = Vec::new();
-    let mut values = &values[..];
-
-    while values.len() > 0 {
-        if values.len() >= 64 {
-            result.push(
-                values[0..64].try_into()
-                    .expect("expected to to get 64 byte array here because only 64 first bytes are taken")
-            );
-            values = &values[64..];
-        } else {
-            let mut entry = [0i32; 64];
-            for i in 0..values.len() {
-                entry[i] = values[i];
-            }
-            result.push(entry);
-        }
-    }
-
-    result
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::{common::ChannelID, common::rgb_to_ycbcr, common::{read_huffman_encoded_channels_data, ycbcr_to_rgb}, reader::{JPEGReader, dct_decode}};
 
     use super::*;
 
-    use core::models::io::{ImageReader, ImageWriterOptions};
     use std::fs::read;
+
+    use bit_vec::BitVec;
+
+    use core::models::io::{ImageReader, ImageWriterOptions};
+
+    use crate::{common::ChannelID, common::rgb_to_ycbcr, common::{read_huffman_encoded_channels_data, ycbcr_to_rgb}, reader::{JPEGReader, dct_decode}};
 
     #[test]
     fn test_rgb_to_ycbcr() {
@@ -738,32 +718,24 @@ mod tests {
 
     #[test]
     fn test_write_simple() {
-        let image_data = read("assets/google2.jpg")
+        let image_data = read("assets/balloon.jpg")
             .expect("failed to load test image");
         
-        info!("reading test image");
         let reader = JPEGReader::new();
         let images = reader.read(&image_data)
             .expect("failed to read test image");
         let image = &images[0];
-        info!("done reading test image");
 
-        info!("writing test image");
         let writer = JPEGWriter::new();
         let new_image_data = writer.write(&image, &ImageWriterOptions::default())
             .expect("failed to write image");
-        info!("done writing test image");
 
-        std::fs::write("assets/test.jpg", &new_image_data).unwrap();
-
-        info!("test image saved to file");
-
-        info!("reading new image");
         let new_images = reader.read(&new_image_data)
             .expect("failed to read new image");
         let new_image = &new_images[0];
 
-        //assert_eq!(image.pixels, new_image.pixels);
+        assert_eq!(new_image.get_pixel(277, 276), Pixel::from_rgb(24, 28, 40));
+        assert_eq!(new_image.get_pixel(833, 386), Pixel::from_rgb(150, 28, 43));
     }
 
     #[test]
