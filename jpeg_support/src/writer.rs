@@ -9,7 +9,7 @@ use std::{collections::HashMap, convert::TryInto};
 
 use byteorder::{BigEndian, ByteOrder};
 
-use crate::{common::{Channel, HuffmanTable, HuffmanTableType}, huffman::HuffmanTreeBuilder, common::rgb_to_ycbcr};
+use crate::{common::{Channel, HuffmanTable, HuffmanTableType}, common::{ChannelID, HuffmanTableID, rgb_to_ycbcr}, common::write_huffman_encoded_channels_data, huffman::HuffmanTreeBuilder, common::zigzag};
 
 // These tables are used by GIMP when saving with 90% quality.
 const QUANTIZATION_TABLE_Y: [i32; 64] = [
@@ -34,23 +34,12 @@ const QUANTIZATION_TABLE_CB_CR: [i32; 64] = [
     20, 20, 20, 20, 20, 20, 20, 20
 ];
 
-const ZIGZAG_ORDER: [i32; 64] = [
-     0,  1,  8, 16,  9,  2,  3, 10, 
-    17, 24, 32, 25, 18, 11,  4,  5, 
-    12, 19, 26, 33, 40, 48, 41, 34, 
-    27, 20, 13,  6,  7, 14, 21, 28, 
-    35, 42, 49, 56, 57, 50, 43, 36, 
-    29, 22, 15, 23, 30, 37, 44, 51, 
-    58, 59, 52, 45, 38, 31, 39, 46, 
-    53, 60, 61, 54, 47, 55, 62, 63
-];
-
 // it turns out that majority of jpeg encoders use pre-defined Huffman tables from standard, instead of
 // generating own tables. This approach actually provides good enough approximation. In this encoding
 // we will use the same approach. These tables are copied from GIMP when exporting at 90% quality.
 // Tables represented as value => (code, code_length).
 lazy_static! {
-    static ref DC_HUFFMAN_Y: HashMap<u16, (i32, u8)> = hashmap!{
+    static ref DC_HUFFMAN_Y: HashMap<u8, (u16, u16)> = hashmap!{
         11 => (510, 9),
         3 => (4, 3),
         9 => (126, 7),
@@ -65,7 +54,7 @@ lazy_static! {
         10 => (254, 8),        
     };
 
-    static ref DC_HUFFMAN_CBCR: HashMap<u16, (i32, u8)> = hashmap!{
+    static ref DC_HUFFMAN_CBCR: HashMap<u8, (u16, u16)> = hashmap!{
         0 => (0, 2),
         5 => (30, 5),
         11 => (2046, 11),
@@ -80,7 +69,7 @@ lazy_static! {
         4 => (14, 4),
     };
 
-    static ref AC_HUFFAN_Y: HashMap<u16, (i32, u8)> = hashmap!{
+    static ref AC_HUFFAN_Y: HashMap<u8, (u16, u16)> = hashmap!{
         170 => (65487, 16),
         118 => (65457, 16),
         69 => (65432, 16),
@@ -245,7 +234,7 @@ lazy_static! {
         18 => (27, 5),    
     };
 
-    static ref AC_HUFFAN_CBCR: HashMap<u16, (i32, u8)> = hashmap! {
+    static ref AC_HUFFAN_CBCR: HashMap<u8, (u16, u16)> = hashmap! {
         165 => (65484, 16),
         212 => (65510, 16),
         245 => (65529, 16),
@@ -440,24 +429,19 @@ impl ImageWriter for JPEGWriter {
             3 => 1,
         };
 
-        let huffman_tables: HashMap<(HuffmanTableType, u8), HashMap<u16, (i32, u8)>> = hashmap! {
-            (HuffmanTableType::DC, 0) => DC_HUFFMAN_Y.clone(),
-            (HuffmanTableType::DC, 1) => DC_HUFFMAN_CBCR.clone(),
-            (HuffmanTableType::AC, 0) => AC_HUFFAN_Y.clone(),
-            (HuffmanTableType::AC, 1) => AC_HUFFAN_CBCR.clone(),
-        };
-
-        let huffman_table_id_by_channel: HashMap<u8, u8> = hashmap! {
-            1 => 0,
-            2 => 1,
-            3 => 1,
+        let huffman_tables_by_channel: HashMap<(HuffmanTableType, ChannelID), HuffmanTable> = hashmap! {
+            (HuffmanTableType::DC, 1) => HuffmanTable::from_vk(0, HuffmanTableType::DC, &DC_HUFFMAN_Y),
+            (HuffmanTableType::DC, 2) => HuffmanTable::from_vk(1, HuffmanTableType::DC, &DC_HUFFMAN_CBCR),
+            (HuffmanTableType::DC, 3) => HuffmanTable::from_vk(1, HuffmanTableType::DC, &DC_HUFFMAN_CBCR),
+            (HuffmanTableType::AC, 1) => HuffmanTable::from_vk(0, HuffmanTableType::AC, &AC_HUFFAN_Y),
+            (HuffmanTableType::AC, 2) => HuffmanTable::from_vk(1, HuffmanTableType::AC, &AC_HUFFAN_CBCR),
+            (HuffmanTableType::AC, 3) => HuffmanTable::from_vk(2, HuffmanTableType::AC, &AC_HUFFAN_CBCR),
         };
 
         // given image, transform it into multiple blocks 8x8.
         let mcus: Vec<[Pixel; 64]> = image_to_mcus(&image);
-        let mut pixels_ycbcr: Vec<[[i32; 3]; 64]> = Vec::with_capacity(mcus.len());
-        let mut prev_dc = vec![0; 3];
-        let mut image_data: Vec<u8> = Vec::new();
+
+        let mut matrices: Vec<[[i32; 64]; 3]> = Vec::new();
         for mcu in mcus {
             let mut mcu_pixels = [[0i32; 3]; 64];
 
@@ -466,36 +450,27 @@ impl ImageWriter for JPEGWriter {
                 mcu_pixels[i] = [ycbcr.0, ycbcr.1, ycbcr.2];
             }
 
+            let mut mcu_matrices = [[0i32; 64]; 3];
+
             for channel in 0..mcu_pixels[0].len() {
                 let channel_id = channel + 1;
                 let quantization_table_id = quantization_table_by_channel[&(channel_id as u8)];
                 let quantization_table = quantization_tables[&quantization_table_id];
 
-                let huffman_table_id = huffman_table_id_by_channel[&(channel_id as u8)];
-                let dc_huffman_table: &HashMap<u16, (i32, u8)> = &huffman_tables[&(HuffmanTableType::DC, huffman_table_id)];
-                let ac_huffman_table: &HashMap<u16, (i32, u8)> = &huffman_tables[&(HuffmanTableType::AC, huffman_table_id)];    
-
                 let channel = extract_channel(&mcu_pixels, channel);
                 let channel = dct_encode(&channel);
                 let channel = divide_64s(&channel, &quantization_table);
-                let mut channel = zigzag(&channel);
                 
-                channel[0] = channel[0] - prev_dc[channel_id - 1];
-                prev_dc[channel_id - 1] = channel[0];
-
-                let mut block_data = BitVec::new();
-                // trace!("writing dc value: {}", channel[0]);
-                write_factor(&mut block_data, dc_huffman_table, channel[0]);
-                for i in 1..64 {
-                    let ac = channel[i];
-                    write_factor(&mut block_data, ac_huffman_table, ac);
-                }
-
-                image_data.append(&mut block_data.to_bytes());
+                mcu_matrices[channel_id - 1] = channel;
             }
 
-            pixels_ycbcr.push(mcu_pixels);
+            matrices.push(mcu_matrices);
         }
+
+        let image_data = write_huffman_encoded_channels_data(
+            &matrices,
+            &huffman_tables_by_channel
+        );
 
         let channels: Vec<Channel> = (0..3).map(|i| {
             let id  = i + 1;
@@ -570,7 +545,7 @@ fn write_start_of_scan(data: Vec<u8>) -> Vec<u8> {
     data
 }
 
-fn write_huffman_table(table_type: HuffmanTableType, id: u8, table: &HashMap<u16, (i32, u8)>) -> Vec<u8> {
+fn write_huffman_table(table_type: HuffmanTableType, id: u8, table: &HashMap<u8, (u16, u16)>) -> Vec<u8> {
     // TODO: do this correctly
     match (table_type, id) {
         (HuffmanTableType::DC, 0) => vec![0, 31, 0, 0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
@@ -579,42 +554,6 @@ fn write_huffman_table(table_type: HuffmanTableType, id: u8, table: &HashMap<u16
         (HuffmanTableType::AC, 1) => vec![0, 181, 17, 0, 2, 1, 2, 4, 4, 3, 4, 7, 5, 4, 4, 0, 1, 2, 119, 0, 1, 2, 3, 17, 4, 5, 33, 49, 6, 18, 65, 81, 7, 97, 113, 19, 34, 50, 129, 8, 20, 66, 145, 161, 177, 193, 9, 35, 51, 82, 240, 21, 98, 114, 209, 10, 22, 36, 52, 225, 37, 241, 23, 24, 25, 26, 38, 39, 40, 41, 42, 53, 54, 55, 56, 57, 58, 67, 68, 69, 70, 71, 72, 73, 74, 83, 84, 85, 86, 87, 88, 89, 90, 99, 100, 101, 102, 103, 104, 105, 106, 115, 116, 117, 118, 119, 120, 121, 122, 130, 131, 132, 133, 134, 135, 136, 137, 138, 146, 147, 148, 149, 150, 151, 152, 153, 154, 162, 163, 164, 165, 166, 167, 168, 169, 170, 178, 179, 180, 181, 182, 183, 184, 185, 186, 194, 195, 196, 197, 198, 199, 200, 201, 202, 210, 211, 212, 213, 214, 215, 216, 217, 218, 226, 227, 228, 229, 230, 231, 232, 233, 234, 242, 243, 244, 245, 246, 247, 248, 249, 250],
         other => panic!("Unexpected Huffman table to write: {:?}", other),
     }
-}
-
-fn write_factor(output_bitvec: &mut BitVec, huffman_table: &HashMap<u16, (i32, u8)>, factor: i32) {
-    //trace!("writing factor: {}", factor);
-    let non_zero_digits = count_non_zero_digits(factor) + 1;
-
-    // TODO: negative numbers?
-
-    write_huffman_code(output_bitvec, huffman_table[&(non_zero_digits as u16)]);
-    if non_zero_digits > 0 {
-        write_number_bits(output_bitvec, factor, non_zero_digits);
-    }
-}
-
-fn write_huffman_code(output_bitvec: &mut BitVec, code: (i32, u8)) {
-    write_number_bits(output_bitvec, code.0, code.1)
-}
-
-fn write_number_bits(output_bitvec: &mut BitVec, number: i32, total_bits: u8) {
-    // trace!("writing huffman with {} {}", number, total_bits);
-    for i in 0..total_bits {
-        let index = total_bits - i;
-        output_bitvec.push(((number >> index) & 0b1) == 1);
-    }
-}
-
-fn count_non_zero_digits(value: i32) -> u8 {
-    let mut result = 0;
-
-    for i in 0..32 {
-        if value & (1 << i) == 1 {
-            result = i;
-        }
-    }
-
-    result
 }
 
 fn write_baseline_dct(width: u16, height: u16, channels: &Vec<Channel>) -> Vec<u8> {
@@ -667,16 +606,6 @@ fn write_quantization_table(table_id: u8, table: &[i32; 64]) -> Vec<u8> {
     }
     
     data
-}
-
-fn zigzag(values: &[i32; 64]) -> [i32; 64] {
-    let mut result = [0i32; 64];
-
-    for i in 0..64 {
-        result[i] = values[ZIGZAG_ORDER[i] as usize];
-    }
-
-    result
 }
 
 fn divide_64s(a: &[i32; 64], b: &[i32; 64]) -> [i32; 64] {
@@ -791,7 +720,7 @@ fn split_into_mcus(values: Vec<i32>) -> Vec<[i32; 64]> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{common::rgb_to_ycbcr, reader::{JPEGReader, dct_decode}, common::ycbcr_to_rgb};
+    use crate::{common::ChannelID, common::rgb_to_ycbcr, common::{read_huffman_encoded_channels_data, ycbcr_to_rgb}, reader::{JPEGReader, dct_decode}};
 
     use super::*;
 
@@ -896,6 +825,58 @@ mod tests {
             245, 63, 27, 204, 176, 21, 176, 117, 189, 199, 162, 122, 31
         ];
     
-        
+        let total_mcus = 4;
+
+        let channels = hashmap! {
+            1 => Channel {
+                id: 1,
+                horizontal_sampling: 1,
+                vertical_sampling: 1,
+                quantization_table_id: 0,
+            },
+            2 => Channel {
+                id: 2,
+                horizontal_sampling: 1,
+                vertical_sampling: 1,
+                quantization_table_id: 0,
+            },
+            3 => Channel {
+                id: 3,
+                horizontal_sampling: 1,
+                vertical_sampling: 1,
+                quantization_table_id: 0,
+            }
+        };
+
+        let huffman_tables = hashmap! {
+            (HuffmanTableType::DC, 1 as ChannelID) => HuffmanTable::from_vk(0, HuffmanTableType::DC, &DC_HUFFMAN_Y),
+            (HuffmanTableType::DC, 2 as ChannelID) => HuffmanTable::from_vk(1, HuffmanTableType::DC, &DC_HUFFMAN_CBCR),
+            (HuffmanTableType::DC, 3 as ChannelID) => HuffmanTable::from_vk(1, HuffmanTableType::DC, &DC_HUFFMAN_CBCR),
+            (HuffmanTableType::AC, 1 as ChannelID) => HuffmanTable::from_vk(0, HuffmanTableType::AC, &AC_HUFFAN_Y),
+            (HuffmanTableType::AC, 2 as ChannelID) => HuffmanTable::from_vk(1, HuffmanTableType::AC, &AC_HUFFAN_CBCR),
+            (HuffmanTableType::AC, 3 as ChannelID) => HuffmanTable::from_vk(1, HuffmanTableType::AC, &AC_HUFFAN_CBCR),
+        };
+
+        let mut matrices = read_huffman_encoded_channels_data(
+            &BitVec::from_bytes(&encoded_data),
+            total_mcus,
+            &channels,
+            &huffman_tables
+        ).expect("failed to read test huffman encoded data");
+
+        let mut matrices_transformed: Vec<[[i32; 64]; 3]> = Vec::new();
+        while matrices.len() > 0 {
+            matrices_transformed.push([
+                matrices.remove(0),
+                matrices.remove(0),
+                matrices.remove(0)
+            ]);
+        }
+
+        trace!("matrices read: {:?}", matrices);
+
+        let encoded = write_huffman_encoded_channels_data(&matrices_transformed, &huffman_tables);
+
+        trace!("encoded data is: {:?}", encoded);
     }
 }
