@@ -484,7 +484,7 @@ impl ImageWriter for JPEGWriter {
                 prev_dc[channel_id - 1] = channel[0];
 
                 let mut block_data = BitVec::new();
-                trace!("writing dc value: {}", channel[0]);
+                // trace!("writing dc value: {}", channel[0]);
                 write_factor(&mut block_data, dc_huffman_table, channel[0]);
                 for i in 1..64 {
                     let ac = channel[i];
@@ -598,6 +598,7 @@ fn write_huffman_code(output_bitvec: &mut BitVec, code: (i32, u8)) {
 }
 
 fn write_number_bits(output_bitvec: &mut BitVec, number: i32, total_bits: u8) {
+    // trace!("writing huffman with {} {}", number, total_bits);
     for i in 0..total_bits {
         let index = total_bits - i;
         output_bitvec.push(((number >> index) & 0b1) == 1);
@@ -880,5 +881,21 @@ mod tests {
         }
 
         assert!(diff < 50);
+    }
+
+    #[test]
+    fn test_huffman_encode() {
+        let encoded_data = [
+            246, 11, 123, 1, 227, 175, 218, 14, 63, 138, 94, 28, 241, 106, 191, 130, 68, 66, 55, 0, 112, 120, 193, 
+            175, 167, 173, 159, 209, 142, 18, 52, 20, 147, 178, 50, 193, 113, 164, 32, 220, 42, 47, 117, 232, 124, 
+            111, 227, 169, 12, 190, 44, 241, 159, 138, 124, 46, 119, 68, 164, 144, 167, 160, 207, 90, 252, 123, 49, 
+            138, 196, 85, 230, 93, 79, 219, 114, 223, 22, 176, 216, 120, 90, 86, 62, 254, 240, 55, 131, 109, 254, 
+            13, 248, 147, 254, 17, 127, 9, 120, 91, 117, 188, 139, 187, 204, 13, 142, 61, 115, 95, 140, 229, 156, 
+            75,  136, 171, 89, 70, 79, 83, 241, 76, 95, 8, 66, 20, 190, 177, 69, 221, 31, 26, 124, 101, 240, 71, 
+            133, 19, 227, 23, 140, 60, 39, 225, 117, 27, 215, 4, 168, 232, 15, 113, 95, 180, 229, 209, 88, 168, 93, 
+            245, 63, 27, 204, 176, 21, 176, 117, 189, 199, 162, 122, 31
+        ];
+    
+        
     }
 }

@@ -12,6 +12,7 @@ extern crate lazy_static;
 extern crate maplit;
 
 mod common;
+pub mod errors;
 mod huffman;
 pub mod reader;
 pub mod writer;
