@@ -1,4 +1,5 @@
 #![feature(box_syntax)]
+#![feature(destructuring_assignment)]
 
 use core::{models::io::ImageReader, plugins::ImageFormatSupportPlugin, models::io::ImageWriter};
 

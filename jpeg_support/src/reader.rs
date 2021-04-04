@@ -6,7 +6,7 @@ use bit_vec::BitVec;
 use core::models::{image::Image, pixel::Pixel, io::{ImageIOError, ImageReader}};
 use std::collections::HashMap;
 
-use crate::{common::{Channel, HuffmanTable, HuffmanTableType}, common::read_huffman_encoded_channels_data, common::{ChannelID, ycbcr_to_rgb}, errors::JPEGReaderError, huffman::HuffmanTree, common::unzigzag_64};
+use crate::{common::{Channel, HuffmanTable, HuffmanTableType}, common::read_huffman_encoded_channels_data, common::{ChannelID, ycbcr_to_rgb}, common::unzigzag_64, errors::JPEGReaderError, huffman::HuffmanTree, common::unescape_image_data};
 
 // see:
 // https://habr.com/ru/post/102521/
@@ -179,8 +179,8 @@ fn read_segment(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGReaderErr
 }
 
 fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGReaderError> {
-    trace!("reading start of scan");
     let block_length = BigEndian::read_u16(&data[0..2]) as usize;
+    trace!("reading start of scan with block length = {}", block_length);
     let data = &data[2..];
 
     let mut jpeg = jpeg.clone();
@@ -212,32 +212,10 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
     let data = &data[3..];
 
     let data = &data[0..data.len()-2];
-    let mut new_data = Vec::with_capacity(data.len());
-    let mut offset = 0;
-    while offset < data.len() {
-        let byte = data[offset];
-        if byte == 0xFF {
-            if data[offset + 1] == 0x00 {
-                offset += 1;
-            } else if data[offset + 1] == 0xD9 {
-                break;
-            } else {
-                return Err(JPEGReaderError::InvalidEncodedData {
-                    description: format!("Unexpected marker in encoded data: {:x?} {:x?}", data[offset], data[offset + 1])
-                });
-            }
-        }
-        new_data.push(byte);
-
-        offset += 1;
-    }
-    let data_length = offset;
-    let data: &[u8] = &new_data;
+    let (data, data_length) = unescape_image_data(&data)?;
 
     // reading encoded bits
     let bitvec = BitVec::from_bytes(&data);
-
-    trace!("reading data is {:?}", &data);
 
     trace!("bitvec length is {}", bitvec.len());
 
@@ -369,6 +347,7 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
     }
 
     jpeg = jpeg.with_image(image);
+    trace!("done reading image data");
     Ok((jpeg, block_length + 2 + data_length))
 }
 

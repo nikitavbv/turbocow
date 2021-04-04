@@ -122,7 +122,7 @@ pub fn write_huffman_encoded_channels_data(
     data: &Vec<[[i32; 64]; 3]>,
     huffman_tables: &HashMap<(HuffmanTableType, ChannelID), HuffmanTable>,
 ) -> Vec<u8> {
-    let mut result = Vec::new();
+    let mut block_data = BitVec::new();
     let mut prev_dc = [0i32; 3];
 
     for mcu in data {
@@ -132,32 +132,58 @@ pub fn write_huffman_encoded_channels_data(
             let ac_huffman_table: &HashMap<u8, (u16, u16)> = &huffman_tables[&(HuffmanTableType::AC, channel_id)].vk_table();
 
             let mut channel = zigzag(&channel);
-                
+              
+            let prev_value = channel[0];
             channel[0] = channel[0] - prev_dc[channel_id as usize - 1];
-            prev_dc[channel_id as usize - 1] = channel[0];
+            prev_dc[channel_id as usize - 1] = prev_value;
 
-            let mut block_data = BitVec::new();
-            // trace!("writing dc value: {}", channel[0]);
-            write_factor(&mut block_data, dc_huffman_table, channel[0]);
-            for i in 1..64 {
-                let ac = channel[i];
-                write_factor(&mut block_data, ac_huffman_table, ac);
+            write_factor(&mut block_data, dc_huffman_table, channel[0], 0);
+
+            let mut offset = 1;
+            while offset < 64 {
+                let mut following_zeros = 0;
+                while offset + following_zeros < 64 {
+                    if channel[offset + following_zeros] == 0 {
+                        following_zeros += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                if offset + following_zeros == 64 {
+                    write_factor(&mut block_data, ac_huffman_table, 0, 0);
+                    break;
+                }
+
+                following_zeros = following_zeros.min(15);
+                offset += following_zeros;
+
+                let ac = channel[offset];
+
+                write_factor(&mut block_data, ac_huffman_table, ac, following_zeros as u8);
+
+                offset += 1;
             }
-
-            result.append(&mut block_data.to_bytes());
         }
     }
 
-    result
+    while block_data.len() % 8 != 0 {
+        block_data.push(true);
+    }
+
+    block_data.to_bytes()
 }
 
-fn write_factor(output_bitvec: &mut BitVec, huffman_table: &HashMap<u8, (u16, u16)>, factor: i32) {
-    //trace!("writing factor: {}", factor);
-    let non_zero_digits = count_non_zero_digits(factor) + 1;
+fn write_factor(output_bitvec: &mut BitVec, huffman_table: &HashMap<u8, (u16, u16)>, factor: i32, following_zeros: u8) {
+    let (factor, non_zero_digits) = if factor < 0 {
+        encode_negative(factor)
+    } else {
+        (factor, count_non_zero_digits(factor))
+    };
 
-    // TODO: negative numbers?
+    let value = non_zero_digits | (following_zeros << 4);
 
-    write_huffman_code(output_bitvec, huffman_table[&non_zero_digits]);
+    write_huffman_code(output_bitvec, huffman_table[&value]);
     if non_zero_digits > 0 {
         write_number_bits(output_bitvec, factor, non_zero_digits);
     }
@@ -168,9 +194,8 @@ fn write_huffman_code(output_bitvec: &mut BitVec, code: (u16, u16)) {
 }
 
 fn write_number_bits(output_bitvec: &mut BitVec, number: i32, total_bits: u8) {
-    // trace!("writing huffman with {} {}", number, total_bits);
     for i in 0..total_bits {
-        let index = total_bits - i;
+        let index = total_bits - i - 1;
         output_bitvec.push(((number >> index) & 0b1) == 1);
     }
 }
@@ -179,8 +204,8 @@ fn count_non_zero_digits(value: i32) -> u8 {
     let mut result = 0;
 
     for i in 0..32 {
-        if value & (1 << i) == 1 {
-            result = i;
+        if (value >> i) & 1 == 1 {
+            result = i + 1;
         }
     }
 
@@ -223,13 +248,11 @@ pub fn read_huffman_encoded_channels_data(
                         if !dc_factor_read {
                             if dc_huffman_table.contains_key(&(bitgroup, bitgroup_length)) {
                                 let value = dc_huffman_table[&(bitgroup, bitgroup_length)];
-                                // trace!("reading db by {:?}", (bitgroup, bitgroup_length));
                                 bitgroup = 0;
                                 bitgroup_length = 0;
                 
                                 if value == 0 {
                                     factor_offset += 1;
-                                    // trace!("dc is 0");
                                 } else {
                                     let mut factor: i32 = 0;
                                     let mut first_bit_is_one = false;
@@ -246,7 +269,6 @@ pub fn read_huffman_encoded_channels_data(
                                         factor = factor - 2i32.pow(value as u32) + 1;
                                     }
 
-                                    // trace!("read dc value: {}", factor);
                                     factor_vals[factor_offset] = factor;
                                     factor_offset += 1;
                                 }
@@ -275,12 +297,11 @@ pub fn read_huffman_encoded_channels_data(
                                         factor = (factor << 1) | (if bitvec[offset] { 1 } else { 0 });
                                         offset += 1;
                                     }
-                
+
                                     if !first_bit_is_one {
-                                        factor = factor - 2i32.pow(factor_length as u32) + 1;
+                                        factor = decode_negative(factor, factor_length);
                                     }
                 
-                                    //trace!("read ac value: {}", factor);
                                     factor_vals[factor_offset] = factor;
                                     factor_offset += 1;
                                 }
@@ -299,4 +320,110 @@ pub fn read_huffman_encoded_channels_data(
     }
 
     Ok(result)
+}
+
+fn encode_negative(number: i32) -> (i32, u8) {
+    let mut mask = 0;
+    let mut len = 0;
+    for _ in 0..(count_non_zero_digits(-number)) {
+        mask = (mask << 1) | 1;
+        len += 1;
+    }
+
+    let result = (-number) ^ mask;
+    (result, len)
+}
+
+fn decode_negative(number: i32, code_length: u8) -> i32 {
+    number - 2i32.pow(code_length as u32) + 1
+}
+
+pub fn unescape_image_data(data: &[u8]) -> Result<(Vec<u8>, usize), JPEGReaderError> {
+    let mut new_data = Vec::with_capacity(data.len());
+    let mut offset = 0;
+    while offset < data.len() {
+        let byte = data[offset];
+        if byte == 0xFF {
+            if data[offset + 1] == 0x00 {
+                offset += 1;
+            } else if data[offset + 1] == 0xD9 {
+                break;
+            } else {
+                return Err(JPEGReaderError::InvalidEncodedData {
+                    description: format!("Unexpected marker in encoded data: {:x?} {:x?}", data[offset], data[offset + 1])
+                });
+            }
+        }
+        new_data.push(byte);
+
+        offset += 1;
+    }
+
+    Ok((new_data, offset))
+}
+
+pub fn escape_image_data(data: &[u8]) -> Vec<u8> {
+    let mut new_data = Vec::with_capacity(data.len());
+
+    for element in data {
+        new_data.push(*element);
+
+        if *element == 0xFF {
+            new_data.push(0x00);
+        }
+    }
+
+    new_data
+}
+
+#[cfg(test)]
+mod tests {
+    
+    use super::*;
+
+    #[test]
+    fn test_count_nonzero_digits_5() {
+        assert_eq!(count_non_zero_digits(5), 3);
+    }
+
+    #[test]
+    fn test_count_nonzero_digits_96() {
+        assert_eq!(count_non_zero_digits(96), 7);
+    }
+
+    #[test]
+    fn test_encode_negative() {
+        for i in 1..250 {
+            let encoded = encode_negative(-i);
+            let decoded = decode_negative(encoded.0, encoded.1);
+        
+            assert_eq!(decoded, -i);
+        }
+    }
+
+    #[test]
+    fn test_encode_negative_8() {
+        assert_eq!(encode_negative(-8), (7, 4));
+    }
+
+    #[test]
+    fn test_escape_unescape() {
+        let test_data_escaped: Vec<u8> = vec![
+            246, 11, 123, 1, 227, 175, 218, 14, 63, 138, 94, 28, 241, 106, 191, 130, 68, 66, 55, 0, 112, 
+            120, 193, 175, 167, 173, 159, 209, 142, 18, 52, 20, 147, 178, 50, 193, 113, 164, 32, 220, 42, 
+            47, 117, 232, 124, 111, 227, 169, 12, 190, 44, 241, 159, 138, 124, 46, 119, 68, 164, 144, 167, 
+            160, 207, 90, 252, 123, 49, 138, 196, 85, 230, 93, 79, 219, 114, 223, 22, 176, 216, 120, 90, 
+            86, 62, 254, 240, 55, 131, 109, 254, 13, 248, 147, 254, 17, 127, 9, 120, 91, 117, 188, 139, 
+            187, 204, 13, 142, 61, 115, 95, 140, 229, 156, 75, 136, 171, 89, 70, 79, 83, 241, 76, 95, 8, 
+            66, 20, 190, 177, 69, 221, 31, 26, 124, 101, 240, 71, 133, 19, 227, 23, 140, 60, 39, 225, 117, 
+            27, 215, 4, 168, 232, 15, 113, 95, 180, 229, 209, 88, 168, 93, 245, 63, 27, 204, 176, 21, 176, 
+            117, 189, 199, 162, 122, 31
+        ];
+    
+        let (unescaped, offset) = unescape_image_data(&test_data_escaped).expect("Failed to unescape test image data");
+
+        let escaped = escape_image_data(&unescaped);
+
+        assert_eq!(escaped, test_data_escaped);
+    }
 }
