@@ -33,11 +33,17 @@ fn main() {
     };
 
     if args.len() > 1 && args[1] == "plugins" {
-        if args.len() > 2 && args[2] == "download" {
-            if args.len() > 3 {
-                install_plugin(&args[3]);
-            } else {
-                error!("please specify plugin name to download, for example: gif_support"); 
+        if args.len() > 2 {
+            match args[2].as_str() {
+                "download" => {
+                    if args.len() > 3 {
+                        install_plugin(&args[3]);
+                    } else {
+                        error!("please specify plugin name to download, for example: gif_support");
+                    }
+                },
+                "list" => list_plugins(),
+                other => error!("Unknown plugins action: {:?}", other),
             }
         } else {
             error!("please specify plugins action, for example: download");
@@ -136,14 +142,8 @@ fn argument_present(args: &Vec<String>, argument_name: &str) -> bool {
 }
 
 fn install_plugin(plugin_name: &str) {
-    let library_name = if cfg!(windows) {
-        format!("{}.dll", plugin_name)
-    } else {
-        format!("lib{}.so", plugin_name)
-    };
-    let plugin_path = format!("{}/{}", PLUGINS_DIR, library_name);
-    let plugin_path_as_path = Path::new(&plugin_path);
-    if plugin_path_as_path.exists() {
+    let plugin_path = plugin_installation_path(plugin_name);
+    if is_plugin_installed(plugin_name) {
         if let Err(err) = fs::remove_file(&plugin_path) {
             warn!("failed to remove existing file{} ", err);
         }
@@ -151,7 +151,7 @@ fn install_plugin(plugin_name: &str) {
 
     info!("downloading plugin \"{}\" to {}", plugin_name, plugin_path);
 
-    let mut resp = reqwest::blocking::get(format!("https://turbocow.nikitavbv.com/plugins/{}", library_name))
+    let mut resp = reqwest::blocking::get(format!("https://turbocow.nikitavbv.com/plugins/{}", plugin_library_name(plugin_name)))
         .expect("failed to download");
     if resp.status() == 404 {
         error!("Failed to download plugin. Plugin with name \"{}\" does not exist", plugin_name);
@@ -165,4 +165,35 @@ fn install_plugin(plugin_name: &str) {
     io::copy(&mut resp, &mut file).expect("failed to save downloaded file");
 
     info!("plugin \"{}\" downloaded", plugin_name);
+}
+
+fn list_plugins() {
+    let resp = reqwest::blocking::get("https://turbocow.nikitavbv.com/plugins/plugins.txt")
+        .expect("failed to get list of plugins");
+    let plugins = resp.text().expect("failed to parse plugins list response");
+
+    info!("Available plugins:");
+    plugins.lines()
+        .filter(|line| !line.replace("\n", "").is_empty())
+        .for_each(|line| info!("- {}{}", line, if is_plugin_installed(&line.replace("\n", "")) { " - installed" } else { "" }));
+
+    info!("To install or update plugins: ./converter plugins download bmp_support");
+}
+
+fn is_plugin_installed(name: &str) -> bool {
+    let plugin_path = plugin_installation_path(name);
+    let plugin_path_as_path = Path::new(&plugin_path);
+    plugin_path_as_path.exists()
+}
+
+fn plugin_installation_path(plugin_name: &str) -> String {
+    format!("{}/{}", PLUGINS_DIR, plugin_library_name(plugin_name))
+}
+
+fn plugin_library_name(plugin_name: &str) -> String {
+    if cfg!(windows) {
+        format!("{}.dll", plugin_name)
+    } else {
+        format!("lib{}.so", plugin_name)
+    }
 }

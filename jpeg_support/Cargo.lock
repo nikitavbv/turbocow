@@ -48,6 +48,7 @@ dependencies = [
  "env_logger",
  "libloading",
  "log",
+ "regex",
 ]
 
 [[package]]

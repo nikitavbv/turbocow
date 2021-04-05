@@ -1,0 +1,5 @@
+bmp_support
+jpeg_support
+png_support
+ppm_support
+gif_support
