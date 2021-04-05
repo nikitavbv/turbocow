@@ -774,7 +774,11 @@ fn image_mcu(image: &Image, y: usize, x: usize) -> [Pixel; 64] {
 
     for y in 0..8 {
         for x in 0..8 {
-            result[y * 8 + x] = image.get_pixel(offset_x + x, offset_y + y);
+            result[y * 8 + x] = if offset_x + x < image.width && offset_y + y < image.height {
+                image.get_pixel(offset_x + x, offset_y + y)
+            } else  {
+                Pixel::black()
+            };
         }
     }
 
