@@ -510,6 +510,8 @@ fn read_quantization_table(data: &[u8]) -> Result<(QuantizationTable, usize), JP
 
     let data = unzigzag_64(&new_data);
 
+    trace!("quantization table: {:?}", data);
+
     let table = QuantizationTable {
         id: table_id,
         data,
