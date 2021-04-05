@@ -54,13 +54,20 @@ fn main() {
         let to_format = argument_value(&args, "goal-format")
             .expect("expected to format to be present, because argument is present");
 
-        convert_file(&plugins, &from_file, &to_format);
+        let mut writer_options = ImageWriterOptions::default();
+        if let Some(max_colors_str) = argument_value(&args, "max-colors") {
+            let max_colors: u32 = max_colors_str.parse().expect("Invalid format for max-colors, expected u32");
+            info!("Setting max colors to: {}", max_colors);
+            writer_options = writer_options.with_option_u32("max_colors", max_colors);
+        };
+
+        convert_file(&plugins, &from_file, &to_format, &writer_options);
     } else {
         error!("please specify command:\nconverter --source=example.bmp --goal-format=gif\nconverter plugins install gif_support");
     }
 }
 
-fn convert_file(plugins: &Plugins, from_file: &str, to_format: &str) {
+fn convert_file(plugins: &Plugins, from_file: &str, to_format: &str, writer_options: &ImageWriterOptions) {
     info!("Converting file {} to {}", from_file, to_format);
 
     let file = match fs::read(&from_file) {
@@ -110,7 +117,7 @@ fn convert_file(plugins: &Plugins, from_file: &str, to_format: &str) {
     let mut counter = 0;
     for image in images {
         info!("Converting image #{} to {}", counter, &to_format);
-        let converted = match target_plugin.writer().write(&image, &ImageWriterOptions::default()) {
+        let converted = match target_plugin.writer().write(&image, writer_options) {
             Ok(v) => v,
             Err(err) => {
                 error!("Failed to convert image to {}: {}", &to_format, err);
