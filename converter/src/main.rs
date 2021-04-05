@@ -59,7 +59,13 @@ fn main() {
             let max_colors: u32 = max_colors_str.parse().expect("Invalid format for max-colors, expected u32");
             info!("Setting max colors to: {}", max_colors);
             writer_options = writer_options.with_option_u32("max_colors", max_colors);
-        };
+        }
+        
+        if let Some(quality_str) = argument_value(&args, "quality") {
+            let quality: u32 = quality_str.parse().expect("Invalid format for quality, expected u32");
+            info!("Setting quality to: {}", quality);
+            writer_options = writer_options.with_option_u32("quality", quality);
+        }
 
         convert_file(&plugins, &from_file, &to_format, &writer_options);
     } else {
