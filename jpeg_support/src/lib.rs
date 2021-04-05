@@ -1,4 +1,5 @@
 #![feature(box_syntax)]
+#![feature(destructuring_assignment)]
 
 use core::{models::io::ImageReader, plugins::ImageFormatSupportPlugin, models::io::ImageWriter};
 
@@ -9,7 +10,10 @@ use writer::JPEGWriter;
 extern crate log;
 extern crate custom_error;
 extern crate lazy_static;
+extern crate maplit;
 
+mod common;
+pub mod errors;
 mod huffman;
 pub mod reader;
 pub mod writer;

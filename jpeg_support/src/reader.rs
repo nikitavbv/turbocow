@@ -1,35 +1,18 @@
 use std::f32::consts::PI;
 use byteorder::{BigEndian, ByteOrder};
-use custom_error::custom_error;
 use lazy_static::lazy_static;
 use bit_vec::BitVec;
 
 use core::models::{image::Image, pixel::Pixel, io::{ImageIOError, ImageReader}};
 use std::collections::HashMap;
 
-use crate::huffman::HuffmanTree;
+use crate::{common::{Channel, HuffmanTable, HuffmanTableType}, common::read_huffman_encoded_channels_data, common::{ChannelID, ycbcr_to_rgb}, common::unzigzag_64, errors::JPEGReaderError, huffman::HuffmanTree, common::unescape_image_data};
 
 // see:
 // https://habr.com/ru/post/102521/
 
-custom_error! {pub JPEGReaderError
-    InvalidHeader {description: String} = "Invalid header: {description}",
-    InvalidSegment {description: String} = "Invalid segment: {description}",
-    InvalidEncodedData {description: String} = "Invalid encoded data: {description}",
-}
-
 lazy_static! {
     static ref DCT_PRECOMPUTED: [f32; 4096] = precompute_dct();
-    static ref ZIGZAG_ORDER: [usize; 64] = [
-        1,  2, 6,  7, 15, 16, 28, 29,
-        3,  5, 8,  14, 17, 27, 30, 43,
-        4,  9, 13, 18, 26, 31, 42, 44,
-       10, 12, 19, 25, 32, 41, 45, 54,
-       11, 20, 24, 33, 40, 46, 53, 55,
-       21, 23, 34, 39, 47, 52, 56, 61,
-       22, 35, 38, 48, 51, 57, 60, 62,
-       36, 37, 49, 50, 58, 59, 63, 64 
-    ];
 }
 
 pub struct JPEGReader {
@@ -37,7 +20,7 @@ pub struct JPEGReader {
 
 impl JPEGReader {
 
-    fn new() -> Self {
+    pub fn new() -> Self {
         JPEGReader {}
     }
 }
@@ -119,6 +102,16 @@ impl JPEG {
         }
     }
 
+    fn channels_as_map(&self) -> HashMap<ChannelID, Channel> {
+        let mut result = HashMap::new();
+
+        for channel in &self.channels {
+            result.insert(channel.id, channel.clone());
+        }
+
+        result
+    }
+
     fn huffman_table_by_type(&self, table_type: HuffmanTableType, id: u8) -> Option<HuffmanTable> {
         self.huffman_tables.iter()
             .find(|t| t.table_type == table_type && t.id == id)
@@ -136,28 +129,6 @@ impl JPEG {
 struct QuantizationTable {
     id: u8,
     data: [i32; 64],
-}
-
-#[derive(Clone)]
-struct Channel {
-    id: u8,
-    horizontal_sampling: u8,
-    vertical_sampling: u8,
-    quantization_table_id: u8,
-}
-
-#[derive(Clone)]
-struct HuffmanTable {
-
-    id: u8,
-    table_type: HuffmanTableType,
-    table: HashMap<(u16, u16), u8>,
-}
-
-#[derive(Clone, PartialEq)]
-enum HuffmanTableType {
-    DC,
-    AC
 }
 
 impl ImageReader for JPEGReader {
@@ -208,7 +179,6 @@ fn read_segment(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGReaderErr
 }
 
 fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGReaderError> {
-    trace!("reading start of scan");
     let block_length = BigEndian::read_u16(&data[0..2]) as usize;
     let data = &data[2..];
 
@@ -239,33 +209,12 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
     let _end_of_spectral_selection = data[1];
     let _successive_approximation_bit_position = data[2];
     let data = &data[3..];
-
+    
     let data = &data[0..data.len()-2];
-    let mut new_data = Vec::with_capacity(data.len());
-    let mut offset = 0;
-    while offset < data.len() {
-        let byte = data[offset];
-        if byte == 0xFF {
-            if data[offset + 1] == 0x00 {
-                offset += 1;
-            } else if data[offset + 1] == 0xD9 {
-                break;
-            } else {
-                return Err(JPEGReaderError::InvalidEncodedData {
-                    description: format!("Unexpected marker in encoded data: {:x?} {:x?}", data[offset], data[offset + 1])
-                });
-            }
-        }
-        new_data.push(byte);
-
-        offset += 1;
-    }
-    let data_length = offset;
-    let data: &[u8] = &new_data;
+    let (data, data_length) = unescape_image_data(&data)?;
 
     // reading encoded bits
     let bitvec = BitVec::from_bytes(&data);
-    let mut offset = 0;
 
     trace!("bitvec length is {}", bitvec.len());
 
@@ -278,116 +227,51 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
     let horizontal_mcus = ((jpeg.width as f32) / (max_horizontal_sampling as f32)).ceil() as usize;
     let vertical_mcus = ((jpeg.height as f32) / (max_vertical_sampling as f32)).ceil() as usize;
     trace!("image dimensions in MCUs: {} {}", horizontal_mcus, vertical_mcus);
-    let mut prev_dc = vec![0; total_channels as usize];
 
     let mut image = Image::new(
         ((jpeg.width as f32 / max_horizontal_sampling as f32).ceil() * max_horizontal_sampling as f32) as usize, 
         ((jpeg.height as f32 / max_vertical_sampling as f32).ceil() * max_vertical_sampling as f32) as usize, 
     );
 
+    let channels = jpeg.channels_as_map();
+    
+    let mut huffman_table_by_channel: HashMap<(HuffmanTableType, ChannelID), HuffmanTable> = HashMap::new();
+    for channel_id in 1..=total_channels {
+        huffman_table_by_channel.insert(
+            (HuffmanTableType::DC, channel_id), 
+            jpeg.huffman_table_by_type(HuffmanTableType::DC, huffman_dc_by_channel[&(channel_id as u8)])
+                .ok_or(JPEGReaderError::InvalidEncodedData {
+                    description: format!("DC Huffman table with id = {} is not present", channel_id)
+                })?
+        );
+
+        huffman_table_by_channel.insert(
+            (HuffmanTableType::AC, channel_id),
+            jpeg.huffman_table_by_type(HuffmanTableType::AC ,huffman_ac_by_channel[&(channel_id as u8)])
+                .ok_or(JPEGReaderError::InvalidEncodedData {
+                    description: format!("DC Huffman table with id = {} is not present", channel_id)
+                })?
+        );
+    }
+    
+    let all_matrices = read_huffman_encoded_channels_data(
+        &bitvec,
+        vertical_mcus * horizontal_mcus,
+        &channels,
+        &huffman_table_by_channel,
+    )?;
+    let mut matrix_offset = 0;
+
     for row in 0..vertical_mcus {
         for col in 0..horizontal_mcus {
             let mut channel_data: HashMap<u8, Vec<i32>> = HashMap::new();
 
-            for channel_id in 1..=total_channels {
-                let channel = jpeg.channels.iter().find(|c| c.id == channel_id).ok_or(JPEGReaderError::InvalidEncodedData {
-                    description: format!("Channel with id {} not found", channel_id),
-                })?;
+            for channel_id in (1 as ChannelID)..=(total_channels as ChannelID) {
+                let channel = &channels[&channel_id];
                 let mut matrices: Vec<[i32; 64]> = Vec::new();
-
-                let mut bitgroup = 0;
-                let mut bitgroup_length = 0;            
-
-                let dc_huffman_table = jpeg.huffman_table_by_type(HuffmanTableType::DC, huffman_dc_by_channel[&(channel_id as u8)])
-                    .ok_or(JPEGReaderError::InvalidEncodedData {
-                        description: format!("DC Huffman table with id = {} is not present", channel_id)
-                    })?.table;
-                let ac_huffman_table = jpeg.huffman_table_by_type(HuffmanTableType::AC ,huffman_ac_by_channel[&(channel_id as u8)])
-                    .ok_or(JPEGReaderError::InvalidEncodedData {
-                        description: format!("DC Huffman table with id = {} is not present", channel_id)
-                    })?.table;
-
-                for _ in 0..channel.vertical_sampling {
-                    for _ in 0..channel.horizontal_sampling {
-                        let mut dc_factor_read = false;
-                        let mut factor_vals: [i32; 64] = [0i32; 64];
-                        let mut factor_offset = 0;
-
-                        while factor_offset < 64 {
-                            bitgroup = (bitgroup << 1) | (if bitvec[offset] { 1 } else { 0 });
-                            offset += 1;
-                            bitgroup_length += 1;
-
-                            if !dc_factor_read {
-                                if dc_huffman_table.contains_key(&(bitgroup, bitgroup_length)) {
-                                    let value = dc_huffman_table[&(bitgroup, bitgroup_length)];
-                                    bitgroup = 0;
-                                    bitgroup_length = 0;
-                    
-                                    if value == 0 {
-                                        factor_offset += 1;
-                                    } else {
-                                        let mut factor: i32 = 0;
-                                        let mut first_bit_is_one = false;
-                                        for i in 0..value {
-                                            if i == 0 {
-                                                first_bit_is_one = bitvec[offset];
-                                            }
-                                            
-                                            factor = (factor << 1) | (if bitvec[offset] { 1 } else { 0 });
-                                            offset += 1;
-                                        }
-                    
-                                        if !first_bit_is_one {
-                                            factor = factor - 2i32.pow(value as u32) + 1;
-                                        }
-
-                                        factor_vals[factor_offset] = factor;
-                                        factor_offset += 1;
-                                    }
-                                    dc_factor_read = true;
-                                }
-                            } else {
-                                if ac_huffman_table.contains_key(&(bitgroup, bitgroup_length)) {
-                                    let value = ac_huffman_table[&(bitgroup, bitgroup_length)];
-                                    bitgroup = 0;
-                                    bitgroup_length = 0;
-                    
-                                    if value == 0 {
-                                        factor_offset = 64;
-                                    } else {
-                                        let number_of_zeros = value >> 4;
-                                        let factor_length = value & 0b1111;
-                                        factor_offset += number_of_zeros as usize;
-                    
-                                        let mut factor: i32 = 0;
-                                        let mut first_bit_is_one = false;
-                                        for i in 0..factor_length {
-                                            if i == 0 {
-                                                first_bit_is_one = bitvec[offset];
-                                            }
-                                            
-                                            factor = (factor << 1) | (if bitvec[offset] { 1 } else { 0 });
-                                            offset += 1;
-                                        }
-                    
-                                        if !first_bit_is_one {
-                                            factor = factor - 2i32.pow(factor_length as u32) + 1;
-                                        }
-                    
-                                        factor_vals[factor_offset] = factor;
-                                        factor_offset += 1;
-                                    }
-                                }
-                            }
-
-                            if factor_offset == 64 {
-                                factor_vals[0] += prev_dc[channel_id as usize - 1];
-                                prev_dc[channel_id as usize - 1] = factor_vals[0];
-                                matrices.push(unzigzag_64(&factor_vals));
-                            }
-                        }
-                    }
+                for _ in 0..(channel.vertical_sampling * channel.horizontal_sampling) {
+                    matrices.push(all_matrices[matrix_offset].clone());
+                    matrix_offset += 1;
                 }
 
                 // quantization
@@ -397,12 +281,12 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
                     })?
                     .data;
                 
-                // discrete cosine transform
+                // discrete cosine transform 
                 let matrices: Vec<[i32; 64]> = matrices.iter()
                     .map(|m| multiply_64(&m, &quantization_table))
-                    .map(|m| perform_dct(&m))
+                    .map(|m| dct_decode(&m))
                     .collect();
-
+                
                 // how many pixels should each unit take
                 let v_ratio = max_vertical_sampling / channel.vertical_sampling;
                 let h_ratio = max_horizontal_sampling / channel.horizontal_sampling;
@@ -462,14 +346,8 @@ fn read_start_of_scan(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGRea
     }
 
     jpeg = jpeg.with_image(image);
+    trace!("done reading image data");
     Ok((jpeg, block_length + 2 + data_length))
-}
-
-fn ycbcr_to_rgb(y: i32, cb: i32, cr: i32) -> (u8, u8, u8) {
-    let r = ((y as f32 + 1.402 * (cr as f32 - 128.0)).round() as i32).max(0).min(255) as u8;
-    let g = ((y as f32 - 0.34414 * (cb as f32 - 128.0) - 0.71414 * (cr as f32 - 128.0)).round() as i32).max(0).min(255) as u8;
-    let b = ((y as f32 + 1.772 * (cb as f32 - 128.0)).round() as i32).max(0).min(255) as u8;
-    (r, g, b)
 }
 
 fn precompute_dct() -> [f32; 4096] {
@@ -492,7 +370,7 @@ fn precompute_dct() -> [f32; 4096] {
     res
 }
 
-fn perform_dct(matrix: &[i32; 64]) -> [i32; 64] {
+pub(crate) fn dct_decode(matrix: &[i32; 64]) -> [i32; 64] {
     let mut result  = [0f32; 8 * 8];
 
     for y in 0..8 {
@@ -516,16 +394,6 @@ fn perform_dct(matrix: &[i32; 64]) -> [i32; 64] {
     result_rounded
 }
 
-fn unzigzag_64(matrix: &[i32; 64]) -> [i32; 64] {
-    let mut result = [0i32; 64];
-
-    for i in 0..64 {
-        result[i] = matrix[ZIGZAG_ORDER[i] - 1];
-    }
-
-    result
-}
-
 fn multiply_64(a: &[i32; 64], b: &[i32; 64]) -> [i32; 64] {
     let mut result = [0i32; 64];
 
@@ -537,6 +405,8 @@ fn multiply_64(a: &[i32; 64], b: &[i32; 64]) -> [i32; 64] {
 }
 
 fn read_huffman_table(data: &[u8]) -> Result<(HuffmanTable, usize), JPEGReaderError> {
+    trace!("reading huffman table");
+    
     let block_length = BigEndian::read_u16(&data[0..2]) as usize;
     let data = &data[2..];
 
@@ -567,7 +437,7 @@ fn read_huffman_table(data: &[u8]) -> Result<(HuffmanTable, usize), JPEGReaderEr
     }, block_length + 2))
 }
 
-fn read_baseline_dct(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGReaderError> {
+fn read_baseline_dct(data: &[u8], jpeg: &JPEG) -> Result<(JPEG, usize), JPEGReaderError> {   
     let block_length = BigEndian::read_u16(&data[0..2]) as usize;
     let data = &data[2..];
 
