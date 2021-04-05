@@ -10,8 +10,10 @@ use byteorder::{BigEndian, ByteOrder};
 
 use crate::{common::{Channel, HuffmanTable, HuffmanTableType}, common::{ChannelID, rgb_to_ycbcr}, common::write_huffman_encoded_channels_data, common::zigzag, common::escape_image_data};
 
+const OPTION_QUALITY: &'static str = "quality";
+
 // These tables are used by GIMP when saving with 90% quality.
-const QUANTIZATION_TABLE_Y: [i32; 64] = [
+const QUANTIZATION_TABLE_Y_90: [i32; 64] = [
      3,  2,  2,  3,  5,  8, 10, 12, 
      2,  2,  3,  4,  5, 12, 12, 11, 
      3,  3,  3,  5,  8, 11, 14, 11, 
@@ -22,7 +24,7 @@ const QUANTIZATION_TABLE_Y: [i32; 64] = [
     14, 18, 19, 20, 22, 20, 21, 20
 ];
 
-const QUANTIZATION_TABLE_CB_CR: [i32; 64] = [
+const QUANTIZATION_TABLE_CB_CR_90: [i32; 64] = [
      3,  4,  5,  9, 20, 20, 20, 20, 
      4,  4,  5, 13, 20, 20, 20, 20, 
      5,  5, 11, 20, 20, 20, 20, 20, 
@@ -31,6 +33,75 @@ const QUANTIZATION_TABLE_CB_CR: [i32; 64] = [
     20, 20, 20, 20, 20, 20, 20, 20, 
     20, 20, 20, 20, 20, 20, 20, 20, 
     20, 20, 20, 20, 20, 20, 20, 20
+];
+
+// 100% quality
+const QUANTIZATION_TABLE_Y_100: [i32; 64] = [
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1
+];
+
+const QUANTIZATION_TABLE_CB_CR_100: [i32; 64] = [
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1
+];
+
+// 50% quality
+const QUANTIZATION_TABLE_Y_50: [i32; 64] = [
+    16, 11, 10, 16,  24,  40,  51,  61, 
+    12, 12, 14, 19,  26,  58,  60,  55, 
+    14, 13, 16, 24,  40,  57,  69,  56, 
+    14, 17, 22, 29,  51,  87,  80,  62, 
+    18, 22, 37, 56,  68, 109, 103,  77, 
+    24, 35, 55, 64,  81, 104, 113,  92, 
+    49, 64, 78, 87, 103, 121, 120, 101, 
+    72, 92, 95, 98, 112, 100, 103,  99
+];
+
+const QUANTIZATION_TABLE_CB_CR_50: [i32; 64] = [
+    17, 18, 24, 47, 99, 99, 99, 99, 
+    18, 21, 26, 66, 99, 99, 99, 99, 
+    24, 26, 56, 99, 99, 99, 99, 99,
+    47, 66, 99, 99, 99, 99, 99, 99, 
+    99, 99, 99, 99, 99, 99, 99, 99, 
+    99, 99, 99, 99, 99, 99, 99, 99, 
+    99, 99, 99, 99, 99, 99, 99, 99, 
+    99, 99, 99, 99, 99, 99, 99, 99
+];
+
+// 25% quality
+const QUANTIZATION_TABLE_Y_25: [i32; 64] = [
+     32,  22,  20,  32,  48,  80, 102, 122, 
+     24,  24,  28,  38,  52, 116, 120, 110, 
+     28,  26,  32,  48,  80, 114, 138, 112, 
+     28,  34,  44,  58, 102, 174, 160, 124, 
+     36,  44,  74, 112, 136, 218, 206, 154, 
+     48,  70, 110, 128, 162, 208, 226, 184, 
+     98, 128, 156, 174, 206, 242, 240, 202, 
+    144, 184, 190, 196, 224, 200, 206, 198
+];
+
+const QUANTIZATION_TABLE_CB_CR_25: [i32; 64] = [
+     34,  36,  48,  94, 198, 198, 198, 198, 
+     36,  42,  52, 132, 198, 198, 198, 198, 
+     48,  52, 112, 198, 198, 198, 198, 198, 
+     94, 132, 198, 198, 198, 198, 198, 198, 
+    198, 198, 198, 198, 198, 198, 198, 198, 
+    198, 198, 198, 198, 198, 198, 198, 198, 
+    198, 198, 198, 198, 198, 198, 198, 198, 
+    198, 198, 198, 198, 198, 198, 198, 198
 ];
 
 // it turns out that majority of jpeg encoders use pre-defined Huffman tables from standard, instead of
@@ -415,11 +486,29 @@ impl JPEGWriter {
 
 impl ImageWriter for JPEGWriter {
     
-    fn write(&self, image: &Image, _options: &ImageWriterOptions) -> Result<Vec<u8>, ImageIOError> {
+    fn write(&self, image: &Image, options: &ImageWriterOptions) -> Result<Vec<u8>, ImageIOError> {
         // initialization
+        let quality = options.get_u32(OPTION_QUALITY, 90)?;
+
         let quantization_tables: HashMap<u8, [i32; 64]> = hashmap! {
-            0 => QUANTIZATION_TABLE_Y.clone(),
-            1 => QUANTIZATION_TABLE_CB_CR.clone(),
+            0 => match quality {
+                90 => QUANTIZATION_TABLE_Y_90,
+                100 => QUANTIZATION_TABLE_Y_100,
+                50 => QUANTIZATION_TABLE_Y_50,
+                25 => QUANTIZATION_TABLE_Y_25,
+                other => return Err(ImageIOError::InvalidOptions {
+                    description: format!("Quality level is not supported: {}", other),
+                })
+            }.clone(),
+            1 => match quality {
+                90 => QUANTIZATION_TABLE_CB_CR_90,
+                100 => QUANTIZATION_TABLE_CB_CR_100,
+                50 => QUANTIZATION_TABLE_CB_CR_50,
+                25 => QUANTIZATION_TABLE_CB_CR_25,
+                other => return Err(ImageIOError::InvalidOptions {
+                    description: format!("Quality level is not supported: {}", other),
+                })
+            }.clone(),
         };
 
         let quantization_table_by_channel: HashMap<u8, u8> = hashmap! {

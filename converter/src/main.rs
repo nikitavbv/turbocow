@@ -33,11 +33,17 @@ fn main() {
     };
 
     if args.len() > 1 && args[1] == "plugins" {
-        if args.len() > 2 && args[2] == "download" {
-            if args.len() > 3 {
-                install_plugin(&args[3]);
-            } else {
-                error!("please specify plugin name to download, for example: gif_support"); 
+        if args.len() > 2 {
+            match args[2].as_str() {
+                "download" => {
+                    if args.len() > 3 {
+                        install_plugin(&args[3]);
+                    } else {
+                        error!("please specify plugin name to download, for example: gif_support");
+                    }
+                },
+                "list" => list_plugins(),
+                other => error!("Unknown plugins action: {:?}", other),
             }
         } else {
             error!("please specify plugins action, for example: download");
@@ -48,13 +54,26 @@ fn main() {
         let to_format = argument_value(&args, "goal-format")
             .expect("expected to format to be present, because argument is present");
 
-        convert_file(&plugins, &from_file, &to_format);
+        let mut writer_options = ImageWriterOptions::default();
+        if let Some(max_colors_str) = argument_value(&args, "max-colors") {
+            let max_colors: u32 = max_colors_str.parse().expect("Invalid format for max-colors, expected u32");
+            info!("Setting max colors to: {}", max_colors);
+            writer_options = writer_options.with_option_u32("max_colors", max_colors);
+        }
+        
+        if let Some(quality_str) = argument_value(&args, "quality") {
+            let quality: u32 = quality_str.parse().expect("Invalid format for quality, expected u32");
+            info!("Setting quality to: {}", quality);
+            writer_options = writer_options.with_option_u32("quality", quality);
+        }
+
+        convert_file(&plugins, &from_file, &to_format, &writer_options);
     } else {
         error!("please specify command:\nconverter --source=example.bmp --goal-format=gif\nconverter plugins install gif_support");
     }
 }
 
-fn convert_file(plugins: &Plugins, from_file: &str, to_format: &str) {
+fn convert_file(plugins: &Plugins, from_file: &str, to_format: &str, writer_options: &ImageWriterOptions) {
     info!("Converting file {} to {}", from_file, to_format);
 
     let file = match fs::read(&from_file) {
@@ -104,7 +123,7 @@ fn convert_file(plugins: &Plugins, from_file: &str, to_format: &str) {
     let mut counter = 0;
     for image in images {
         info!("Converting image #{} to {}", counter, &to_format);
-        let converted = match target_plugin.writer().write(&image, &ImageWriterOptions::default()) {
+        let converted = match target_plugin.writer().write(&image, writer_options) {
             Ok(v) => v,
             Err(err) => {
                 error!("Failed to convert image to {}: {}", &to_format, err);
@@ -136,14 +155,8 @@ fn argument_present(args: &Vec<String>, argument_name: &str) -> bool {
 }
 
 fn install_plugin(plugin_name: &str) {
-    let library_name = if cfg!(windows) {
-        format!("{}.dll", plugin_name)
-    } else {
-        format!("lib{}.so", plugin_name)
-    };
-    let plugin_path = format!("{}/{}", PLUGINS_DIR, library_name);
-    let plugin_path_as_path = Path::new(&plugin_path);
-    if plugin_path_as_path.exists() {
+    let plugin_path = plugin_installation_path(plugin_name);
+    if is_plugin_installed(plugin_name) {
         if let Err(err) = fs::remove_file(&plugin_path) {
             warn!("failed to remove existing file{} ", err);
         }
@@ -151,7 +164,7 @@ fn install_plugin(plugin_name: &str) {
 
     info!("downloading plugin \"{}\" to {}", plugin_name, plugin_path);
 
-    let mut resp = reqwest::blocking::get(format!("https://turbocow.nikitavbv.com/plugins/{}", library_name))
+    let mut resp = reqwest::blocking::get(format!("https://turbocow.nikitavbv.com/plugins/{}", plugin_library_name(plugin_name)))
         .expect("failed to download");
     if resp.status() == 404 {
         error!("Failed to download plugin. Plugin with name \"{}\" does not exist", plugin_name);
@@ -165,4 +178,35 @@ fn install_plugin(plugin_name: &str) {
     io::copy(&mut resp, &mut file).expect("failed to save downloaded file");
 
     info!("plugin \"{}\" downloaded", plugin_name);
+}
+
+fn list_plugins() {
+    let resp = reqwest::blocking::get("https://turbocow.nikitavbv.com/plugins/plugins.txt")
+        .expect("failed to get list of plugins");
+    let plugins = resp.text().expect("failed to parse plugins list response");
+
+    info!("Available plugins:");
+    plugins.lines()
+        .filter(|line| !line.replace("\n", "").is_empty())
+        .for_each(|line| info!("- {}{}", line, if is_plugin_installed(&line.replace("\n", "")) { " - installed" } else { "" }));
+
+    info!("To install or update plugins: ./converter plugins download bmp_support");
+}
+
+fn is_plugin_installed(name: &str) -> bool {
+    let plugin_path = plugin_installation_path(name);
+    let plugin_path_as_path = Path::new(&plugin_path);
+    plugin_path_as_path.exists()
+}
+
+fn plugin_installation_path(plugin_name: &str) -> String {
+    format!("{}/{}", PLUGINS_DIR, plugin_library_name(plugin_name))
+}
+
+fn plugin_library_name(plugin_name: &str) -> String {
+    if cfg!(windows) {
+        format!("{}.dll", plugin_name)
+    } else {
+        format!("lib{}.so", plugin_name)
+    }
 }
