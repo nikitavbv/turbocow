@@ -23,7 +23,7 @@ use env_logger::Env;
 use geometry::{transform::Transform, vector3::Vector3};
 use models::image::Image;
 use obj_io::obj_file_reader::ObjFile;
-use objects::{cube::Cube, polygon_object::PolygonObject, sphere::Sphere};
+use objects::polygon_object::PolygonObject;
 use plugins::resolver::PluginResolver;
 use models::io::ImageWriterOptions;
 use render::{basic::BasicRender, render::Render};

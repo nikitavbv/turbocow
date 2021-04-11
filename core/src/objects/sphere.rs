@@ -1,5 +1,5 @@
 use crate::{geometry::{ray::Ray, transform::Transform}, render::intersection::Intersection};
-use crate::scene::scene_object::{SceneObject, SceneObjectBase};
+use crate::scene::scene_object::SceneObject;
 
 pub struct Sphere {
 
