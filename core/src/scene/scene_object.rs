@@ -27,6 +27,4 @@ impl SceneObjectBase {
 pub trait SceneObject {
 
     fn check_intersection(&self, ray: &Ray) -> Option<Intersection>;
-
-    fn base(&self) -> &SceneObjectBase;
 }

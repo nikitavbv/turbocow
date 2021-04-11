@@ -7,8 +7,13 @@ pub struct Vertex {
 }
 
 impl Vertex {
+
     pub const fn new(geometry: Vector3, normal: Vector3) -> Self {
         Vertex { geometry, normal, }
+    }
+
+    pub fn geometry(&self) -> &Vector3 {
+        &self.geometry
     }
 }
 

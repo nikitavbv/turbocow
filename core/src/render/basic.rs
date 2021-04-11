@@ -14,7 +14,7 @@ impl BasicRender {
     pub fn render(&self, scene: &Scene, render_to: &mut Image) {
         let camera = scene.camera();
 
-        let transform = camera.base().transform();
+        let transform = camera.transform();
         let width = render_to.width;
         let height = render_to.height;
         let aspect_ratio = width as f64 / height as f64;
@@ -23,6 +23,7 @@ impl BasicRender {
         let transformed_origin = transform.apply_for_point(transform.position());
 
         for y in 0..height {
+            println!("y is {}", y);
             let normalized_y = 1.0 - 2.0 * (y as f64 + 0.5) / height as f64;
             let camera_y = normalized_y * field_of_view;
 

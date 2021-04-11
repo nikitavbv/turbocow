@@ -7,6 +7,7 @@ extern crate custom_error;
 
 pub mod geometry;
 pub mod models;
+pub mod obj_io;
 pub mod objects;
 pub mod render;
 pub mod scene;
@@ -19,7 +20,8 @@ use std::fs;
 use env_logger::Env;
 use geometry::{transform::Transform, vector3::Vector3};
 use models::image::Image;
-use objects::sphere::Sphere;
+use obj_io::obj_file_reader::ObjFile;
+use objects::{polygon_object::PolygonObject, sphere::Sphere};
 use plugins::resolver::PluginResolver;
 use models::io::ImageWriterOptions;
 use render::basic::BasicRender;
@@ -41,9 +43,13 @@ fn main() {
 fn render_test_scene(plugin_resolver: &mut PluginResolver) {
     let bmp_support = plugin_resolver.resolve_or_install_image_support("bmp");
 
+    let mut cow = ObjFile::new();
+    cow.load("assets/simplecow.obj").expect("Failed to load cow");
+
     let mut scene = Scene::new();
-    scene.set_camera(Camera::default());
-    scene.add_object(box Sphere::new(Transform::new(&Vector3::new(0.0, 0.0, -5.0)), 1.0));
+    scene.set_camera(Camera::default().with_transform(Transform::new(&Vector3::new(0.0, 0.0, -2.0))));
+    // scene.add_object(box Sphere::new(Transform::new(&Vector3::new(0.0, 0.0, -5.0)), 1.0));
+    scene.add_object(box PolygonObject::from_obj_file(&cow));
 
     let render = BasicRender::new();
     let mut output = Image::new(1000, 1000);

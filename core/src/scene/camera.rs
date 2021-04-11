@@ -1,38 +1,36 @@
-use crate::{render::intersection::Intersection, geometry::ray::Ray};
-
-use super::scene_object::{SceneObject, SceneObjectBase};
+use crate::{geometry::transform::Transform, geometry::vector3::Vector3};
 
 pub struct Camera {
-    base: SceneObjectBase,
 
+    transform: Transform,
     field_of_view: f64,
 }
 
 impl Camera {
 
-    pub fn new(size: f64) -> Self {
+    pub fn new(position: Vector3, size: f64) -> Self {
         Self {
-            base: SceneObjectBase::new(),
+            transform: Transform::new(&position),
             field_of_view: 2.0 * size.atan(),
         }
     }
 
     pub fn default() -> Self {
-        Self::new(1.0)
+        Self::new(Vector3::zero(), 1.0)
+    }
+
+    pub fn with_transform(&self, transform: Transform) -> Self {
+        Self {
+            transform,
+            field_of_view: self.field_of_view,
+        }
     }
 
     pub fn field_of_view(&self) -> f64 {
         self.field_of_view
     }
-}
 
-impl SceneObject for Camera {
-
-fn check_intersection(&self, _ray: &Ray) -> Option<Intersection> {
-        panic!("Why are you even trying to find an intersection with a camera?")
-    }
-
-    fn base(&self) -> &SceneObjectBase {
-        &self.base
+    pub fn transform(&self) -> &Transform {
+        &self.transform
     }
 }
