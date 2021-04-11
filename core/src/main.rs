@@ -21,7 +21,7 @@ use env_logger::Env;
 use geometry::{transform::Transform, vector3::Vector3};
 use models::image::Image;
 use obj_io::obj_file_reader::ObjFile;
-use objects::{polygon_object::PolygonObject, sphere::Sphere};
+use objects::{cube::Cube, polygon_object::PolygonObject, sphere::Sphere};
 use plugins::resolver::PluginResolver;
 use models::io::ImageWriterOptions;
 use render::basic::BasicRender;
@@ -47,9 +47,10 @@ fn render_test_scene(plugin_resolver: &mut PluginResolver) {
     cow.load("assets/simplecow.obj").expect("Failed to load cow");
 
     let mut scene = Scene::new();
-    scene.set_camera(Camera::default().with_transform(Transform::new(&Vector3::new(0.0, 0.0, -2.0))));
+    scene.set_camera(Camera::default().with_transform(Transform::new(&Vector3::new(0.0, 0.0, 2.0))));
     // scene.add_object(box Sphere::new(Transform::new(&Vector3::new(0.0, 0.0, -5.0)), 1.0));
-    scene.add_object(box PolygonObject::from_obj_file(&cow));
+    // scene.add_object(box PolygonObject::from_obj_file(&cow));
+    scene.add_object(box Cube::new(Transform::new(&Vector3::new(0.0, 0.0, -5.0)), 1.0));
 
     let render = BasicRender::new();
     let mut output = Image::new(1000, 1000);
