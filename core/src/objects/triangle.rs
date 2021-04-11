@@ -30,7 +30,7 @@ impl SceneObject for Triangle {
         let v2 = self.transform.apply_for_point(&self.v2);
 
         let v0v1 = v1 - v0;
-        let v0v2 = v2 - v1;
+        let v0v2 = v2 - v0;
 
         let direction = ray.direction();
 

@@ -1,6 +1,8 @@
 use crate::{models::pixel::Pixel, geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_object::SceneObject}};
 use crate::models::image::Image;
 
+use super::render::Render;
+
 pub struct BasicRender {
 }
 
@@ -10,8 +12,11 @@ impl BasicRender {
         Self {
         }
     }
+}
 
-    pub fn render(&self, scene: &Scene, render_to: &mut Image) {
+impl Render for BasicRender {
+
+    fn render(&self, scene: &Scene, render_to: &mut Image) {
         let camera = scene.camera();
 
         let transform = camera.transform();

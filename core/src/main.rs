@@ -4,6 +4,7 @@
 extern crate log;
 extern crate libloading;
 extern crate custom_error;
+extern crate colour;
 
 pub mod geometry;
 pub mod models;
@@ -18,13 +19,14 @@ use std::path::Path;
 use std::fs;
 
 use env_logger::Env;
+
 use geometry::{transform::Transform, vector3::Vector3};
 use models::image::Image;
 use obj_io::obj_file_reader::ObjFile;
 use objects::{cube::Cube, polygon_object::PolygonObject, sphere::Sphere};
 use plugins::resolver::PluginResolver;
 use models::io::ImageWriterOptions;
-use render::basic::BasicRender;
+use render::{basic::BasicRender, render::Render};
 use scene::{scene::Scene, camera::Camera};
 
 const DEFAULT_LOGGING_LEVEL: &str = "info";
@@ -44,13 +46,13 @@ fn render_test_scene(plugin_resolver: &mut PluginResolver) {
     let bmp_support = plugin_resolver.resolve_or_install_image_support("bmp");
 
     let mut cow = ObjFile::new();
-    cow.load("assets/simplecow.obj").expect("Failed to load cow");
+    cow.load("assets/cow.obj").expect("Failed to load cow");
 
     let mut scene = Scene::new();
-    scene.set_camera(Camera::default().with_transform(Transform::new(&Vector3::new(0.0, 0.0, 2.0))));
+    scene.set_camera(Camera::default().with_transform(Transform::new(&Vector3::new(0.0, 0.0, 0.5))));
     // scene.add_object(box Sphere::new(Transform::new(&Vector3::new(0.0, 0.0, -5.0)), 1.0));
-    // scene.add_object(box PolygonObject::from_obj_file(&cow));
-    scene.add_object(box Cube::new(Transform::new(&Vector3::new(0.0, 0.0, -5.0)), 1.0));
+    scene.add_object(box PolygonObject::from_obj_file(&cow));
+    //scene.add_object(box Cube::new(Transform::new(&Vector3::new(0.0, 0.0, -5.0)), 1.0));
 
     let render = BasicRender::new();
     let mut output = Image::new(1000, 1000);
