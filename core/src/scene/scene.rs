@@ -10,6 +10,7 @@ impl Scene {
     pub fn new() -> Self {
         Self {
             camera: None,
+            objects: Vec::new(),
         }
     }
 

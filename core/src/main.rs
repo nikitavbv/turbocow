@@ -5,7 +5,9 @@ extern crate log;
 extern crate libloading;
 extern crate custom_error;
 
+pub mod geometry;
 pub mod models;
+pub mod objects;
 pub mod render;
 pub mod scene;
 pub mod plugins;
