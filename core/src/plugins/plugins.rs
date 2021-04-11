@@ -64,7 +64,7 @@ impl PluginManager {
         Ok(plugins)
     }
 
-    fn load_plugin(&mut self, library_path: &Path) -> Result<Box<dyn ImageFormatSupportPlugin>, PluginManagerError> {
+    pub fn load_plugin(&mut self, library_path: &Path) -> Result<Box<dyn ImageFormatSupportPlugin>, PluginManagerError> {
         Ok(unsafe {
             let lib = Library::new(library_path)
                 .map_err(|err| PluginManagerError::FailedToLoadLibrary { description: err.to_string() })?;

@@ -14,8 +14,16 @@ impl Scene {
         }
     }
 
-    pub fn add_object(obj: Box<dyn SceneObject>) {
-        // TODO: finish writing this   
+    pub fn set_camera(&mut self, camera: Camera) {
+        self.camera = Some(camera);
+    }
+
+    pub fn add_object(&mut self, obj: Box<dyn SceneObject>) {
+        self.objects.push(obj)
+    }
+
+    pub fn objects(&self) -> &Vec<Box<dyn SceneObject>> {
+        &self.objects
     }
 
     pub fn camera(&self) -> &Camera {

@@ -1,4 +1,4 @@
-use std::ops::Sub;
+use std::ops::{Add, Sub};
 
 #[derive(Copy, Clone, Debug)]
 pub struct Vector3 {
@@ -17,12 +17,51 @@ impl Vector3 {
         Self::new(0.0, 0.0, 0.0)
     }
 
+    pub fn length(&self) -> f64 {
+        self.x * self.x + self.y * self.y + self.z * self.z
+    }
+
+    pub fn normalized(&self) -> Self {
+        let length = self.length();
+        if length == 0.0 {
+            self.clone()
+        } else {
+            Vector3::new(self.x / length, self.y / length, self.z / length)
+        }
+    }
+
     pub fn dot_product(&self, other: &Self) -> f64 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
     pub fn dot_product_with_self(&self) -> f64 {
-        self.x * self.x + self.y * self.y + self.z * self.z
+        self.dot_product(&self)
+    }
+
+    pub fn cross_product(&self, other: &Vector3) -> Self {
+        Self::new(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x
+        )
+    }
+}
+
+impl Add for Vector3 {
+    
+    type Output = Vector3;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Vector3::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
+    }
+}
+
+impl Add for &Vector3 {
+    
+    type Output = Vector3;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Vector3::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
     }
 }
 
