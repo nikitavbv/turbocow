@@ -1,5 +1,5 @@
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Vector3 {
     pub x: f64,
     pub y: f64,
@@ -15,7 +15,7 @@ impl Vector3 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Vertex {
     geometry: Vector3,
     normal: Vector3,
@@ -25,9 +25,17 @@ impl Vertex {
     pub const fn new(geometry: Vector3, normal: Vector3) -> Self {
         Vertex { geometry, normal, }
     }
+
+    pub fn get_geometry(&self) -> &Vector3 {
+        &self.geometry
+    }
+
+    pub fn get_normal(&self) -> &Vector3 {
+        &self.normal
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Polygon {
     vertices: Vec<Vertex>,
 }

@@ -159,6 +159,7 @@ mod tests {
         assert_eq!(model.vertices.len(), 6);
         assert_eq!(model.vertices_normals.len(), 0);
         assert_eq!(model.polygons.len(), 4);
+        println!("{:?}", model.polygons);
     }
 
     #[test]
