@@ -5,19 +5,38 @@ const DELTA: f64 = 1e-6;
 pub struct Triangle {
 
     transform: Transform,
+
     v0: Vector3,
     v1: Vector3,
     v2: Vector3,
+
+    v0_applied: Vector3,
+
+    v0v1: Vector3,
+    v0v2: Vector3,
 }
 
 impl Triangle {
 
     pub fn new(transform: Transform, v0: Vector3, v1: Vector3, v2: Vector3) -> Self {
+        let v0_applied = transform.apply_for_point(&v0);
+        let v1_applied = transform.apply_for_point(&v1);
+        let v2_applied = transform.apply_for_point(&v2);
+
+        let v0v1 = v1_applied - v0_applied;
+        let v0v2 = v2_applied - v0_applied;
+
         Self {
             transform,
+
             v0,
             v1,
             v2,
+
+            v0_applied,
+
+            v0v1,
+            v0v2,
         }
     }
 }
@@ -25,12 +44,9 @@ impl Triangle {
 impl SceneObject for Triangle {
     
     fn check_intersection(&self, ray: &Ray) -> Option<Intersection> {
-        let v0 = self.transform.apply_for_point(&self.v0);
-        let v1 = self.transform.apply_for_point(&self.v1);
-        let v2 = self.transform.apply_for_point(&self.v2);
-
-        let v0v1 = v1 - v0;
-        let v0v2 = v2 - v0;
+        let v0 = &self.v0_applied;
+        let v0v1 = &self.v0v1;
+        let v0v2 = &self.v0v2;
 
         let direction = ray.direction();
 
