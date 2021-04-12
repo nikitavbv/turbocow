@@ -51,7 +51,7 @@ impl Render for BasicRender {
     }
 }
 
-fn find_intersection<'a>(ray: &Ray, scene: &'a Scene) -> Option<&'a Box<dyn SceneObject>> {
+fn find_intersection<'a>(ray: &Ray, scene: &'a Scene) -> Option<&'a Box<dyn SceneObject + Sync + Send>> {
     let mut result = None;
     let mut min_distance = f64::MAX;
 

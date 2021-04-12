@@ -26,7 +26,7 @@ use obj_io::obj_file_reader::ObjFile;
 use objects::polygon_object::PolygonObject;
 use plugins::resolver::PluginResolver;
 use models::io::ImageWriterOptions;
-use render::{basic::BasicRender, render::Render};
+use render::{multithreaded::MultithreadedRender, render::Render};
 use scene::{scene::Scene, camera::Camera};
 
 const DEFAULT_LOGGING_LEVEL: &str = "info";
@@ -54,7 +54,8 @@ fn render_test_scene(plugin_resolver: &mut PluginResolver) {
     scene.add_object(box PolygonObject::from_obj_file(&cow));
     //scene.add_object(box Cube::new(Transform::new(&Vector3::new(0.0, 0.0, -5.0)), 1.0));
 
-    let render = BasicRender::new();
+    //let render = BasicRender::new();
+    let render = MultithreadedRender::new();
     let mut output = Image::new(1000, 1000);
 
     info!("rendering image");

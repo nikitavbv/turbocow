@@ -2,7 +2,7 @@ use super::{camera::Camera, scene_object::SceneObject};
 
 pub struct Scene {
     camera: Option<Camera>,
-    objects: Vec<Box<dyn SceneObject>>,
+    objects: Vec<Box<dyn SceneObject + Sync + Send>>,
 }
 
 impl Scene {
@@ -18,11 +18,11 @@ impl Scene {
         self.camera = Some(camera);
     }
 
-    pub fn add_object(&mut self, obj: Box<dyn SceneObject>) {
+    pub fn add_object(&mut self, obj: Box<dyn SceneObject + Sync + Send>) {
         self.objects.push(obj)
     }
 
-    pub fn objects(&self) -> &Vec<Box<dyn SceneObject>> {
+    pub fn objects(&self) -> &Vec<Box<dyn SceneObject + Sync + Send>> {
         &self.objects
     }
 
