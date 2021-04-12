@@ -86,10 +86,8 @@ impl ObjFile {
     }
 
     fn parse_vertex_normal(&mut self, line: String) -> Result<(), ObjFileError> {
-        // let line = Regex::new(r"\\s+").unwrap().replace_all(line.as_str(), " ");
         let values = ObjFile::split_line(&line[2..]);
         let mut values = values.iter();
-        // values.next(); // skip 'vn'
         let x = values.next();
         if x.is_none() {
             return Result::Err(ObjFileError::VertexNormalError {
@@ -122,10 +120,8 @@ impl ObjFile {
     }
 
     fn parse_vertex(&mut self, line: String) -> Result<(), ObjFileError> {
-        // let line = Regex::new(r"\\s+").unwrap().replace_all(line.as_str(), " ");
         let values = ObjFile::split_line(&line[1..]);
         let mut values = values.iter();
-        // values.next(); // skip 'v'
         let x = values.next();
         if x.is_none() {
             return Result::Err(ObjFileError::VertexNormalError {
@@ -158,10 +154,8 @@ impl ObjFile {
     }
 
     fn parse_face(&mut self, line: String) -> Result<(), ObjFileError> {
-        // let line = Regex::new(r"\\s+").unwrap().replace_all(line.as_str(), " ");
         let values = ObjFile::split_line(&line[1..]);
         let mut values = values.iter();
-        // values.next(); // skip 'f'
         let mut vertices = Vec::new();
         for _ in 0..3 {
             let mut value = values.next().unwrap().split("/");
