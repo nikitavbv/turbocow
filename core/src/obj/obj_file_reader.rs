@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use crate::geometry::models::{Vector3, Vertex, Polygon};
-use regex::Regex;
 use custom_error::custom_error;
 
 custom_error! {pub ObjFileError
@@ -31,6 +30,11 @@ impl ObjFile {
         let vertex = "v";
         let comment = "#";
         let face = "f";
+        let group = "g";
+        let object = "o";
+        let material = "usemtl";
+        let external_material = "mtllib";
+        let smooth = "s";
 
         let file = File::open(filename).unwrap();
         let lines = BufReader::new(file).lines();
@@ -44,6 +48,16 @@ impl ObjFile {
                 self.parse_vertex(line_data)?;
             } else if line_data.starts_with(face) {
                 self.parse_face(line_data)?;
+            } else if line_data.starts_with(group) {
+                println!("group name(s): {}", &line_data[2..]);
+            } else if line_data.starts_with(material) {
+                println!("material name(s): {}", &line_data[7..]);
+            } else if line_data.starts_with(object) {
+                println!("object name(s): {}", &line_data[2..]);
+            } else if line_data.starts_with(smooth) {
+                println!("smooth: {}", &line_data[2..]);
+            } else if line_data.starts_with(external_material) {
+                println!("external material name(s): {}", &line_data[7..]);
             } else {
                 panic!("Unable to parse line: {}", line_data);
             }
@@ -51,10 +65,31 @@ impl ObjFile {
         Result::Ok(())
     }
 
+    pub fn split_line(str: &str) -> Vec<String> {
+        let mut res = Vec::new();
+        let mut value = "".to_owned();
+        for c in str.chars() {
+            match c {
+                ' ' | '\t' => {
+                    if value.len() > 0 {
+                        res.push(value);
+                    }
+                    value = "".to_owned();
+                },
+                _ => value.push(c),
+            };
+        }
+        if value.len() > 0 {
+            res.push(value);
+        }
+        res
+    }
+
     fn parse_vertex_normal(&mut self, line: String) -> Result<(), ObjFileError> {
-        let line = Regex::new(r"\\s+").unwrap().replace_all(line.as_str(), " ");
-        let mut values = line.split(" ");
-        values.next(); // skip 'vn'
+        // let line = Regex::new(r"\\s+").unwrap().replace_all(line.as_str(), " ");
+        let values = ObjFile::split_line(&line[2..]);
+        let mut values = values.iter();
+        // values.next(); // skip 'vn'
         let x = values.next();
         if x.is_none() {
             return Result::Err(ObjFileError::VertexNormalError {
@@ -87,9 +122,10 @@ impl ObjFile {
     }
 
     fn parse_vertex(&mut self, line: String) -> Result<(), ObjFileError> {
-        let line = Regex::new(r"\\s+").unwrap().replace_all(line.as_str(), " ");
-        let mut values = line.split(" ");
-        values.next(); // skip 'v'
+        // let line = Regex::new(r"\\s+").unwrap().replace_all(line.as_str(), " ");
+        let values = ObjFile::split_line(&line[1..]);
+        let mut values = values.iter();
+        // values.next(); // skip 'v'
         let x = values.next();
         if x.is_none() {
             return Result::Err(ObjFileError::VertexNormalError {
@@ -122,9 +158,10 @@ impl ObjFile {
     }
 
     fn parse_face(&mut self, line: String) -> Result<(), ObjFileError> {
-        let line = Regex::new(r"\\s+").unwrap().replace_all(line.as_str(), " ");
-        let mut values = line.split(" ");
-        values.next(); // skip 'f'
+        // let line = Regex::new(r"\\s+").unwrap().replace_all(line.as_str(), " ");
+        let values = ObjFile::split_line(&line[1..]);
+        let mut values = values.iter();
+        // values.next(); // skip 'f'
         let mut vertices = Vec::new();
         for _ in 0..3 {
             let mut value = values.next().unwrap().split("/");
@@ -159,6 +196,7 @@ mod tests {
         assert_eq!(model.vertices.len(), 6);
         assert_eq!(model.vertices_normals.len(), 0);
         assert_eq!(model.polygons.len(), 4);
+        println!("{:?}", model.polygons);
     }
 
     #[test]
@@ -171,5 +209,17 @@ mod tests {
                 assert_eq!(format!("{:?}", err), "VertexNormalError { description: \"Unable to parse first coordinate: v 2.292fw449 -0.871852 -0.882400. Cause: ParseFloatError { kind: Invalid }\" }");
             },
         };
+    }
+
+    #[test]
+    fn test_split() {
+        assert_eq!(vec!["-4.43".to_owned(), "0.43".to_owned(), "3".to_owned()], ObjFile::split_line(" -4.43 0.43 3  "));
+    }
+
+    #[test]
+    fn test_cow() {
+        let mut model = ObjFile::new();
+        // model.load("./assets/cow.obj").unwrap();
+        model.load("./assets/dragon3.obj").unwrap();
     }
 }
