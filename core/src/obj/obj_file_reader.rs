@@ -4,6 +4,7 @@ use crate::geometry::models::{Vector3, Vertex, Polygon};
 use custom_error::custom_error;
 
 custom_error! {pub ObjFileError
+    ParseError {description: String} = "Failed to parse line: {description}",
     VertexError {description: String} = "Failed to parse vertex: {description}",
     VertexNormalError {description: String} = "Failed to parse vertex normal: {description}",
     FaceError {description: String} = "Failed to parse face: {description}",
@@ -49,17 +50,19 @@ impl ObjFile {
             } else if line_data.starts_with(face) {
                 self.parse_face(line_data)?;
             } else if line_data.starts_with(group) {
-                println!("group name(s): {}", &line_data[2..]);
+                log:: trace!("group name(s): {}", &line_data[2..]);
             } else if line_data.starts_with(material) {
-                println!("material name(s): {}", &line_data[7..]);
+                log:: trace!("material name(s): {}", &line_data[7..]);
             } else if line_data.starts_with(object) {
-                println!("object name(s): {}", &line_data[2..]);
+                log:: trace!("object name(s): {}", &line_data[2..]);
             } else if line_data.starts_with(smooth) {
-                println!("smooth: {}", &line_data[2..]);
+                log:: trace!("smooth: {}", &line_data[2..]);
             } else if line_data.starts_with(external_material) {
-                println!("external material name(s): {}", &line_data[7..]);
+                log:: trace!("external material name(s): {}", &line_data[7..]);
             } else {
-                panic!("Unable to parse line: {}", line_data);
+                return Result::Err(ObjFileError::ParseError {
+                    description: format!("{}", line_data)
+                });
             }
         }
         Result::Ok(())
