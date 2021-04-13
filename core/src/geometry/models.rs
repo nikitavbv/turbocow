@@ -12,19 +12,9 @@ impl Vertex {
         Vertex { geometry, normal, }
     }
 
-<<<<<<< HEAD
-    pub fn get_geometry(&self) -> &Vector3 {
-        &self.geometry
-    }
-
-    pub fn get_normal(&self) -> &Vector3 {
-        &self.normal
-    }
-=======
     pub fn geometry(&self) -> &Vector3 {
         &self.geometry
     }
->>>>>>> master
 }
 
 #[derive(Debug, Clone)]

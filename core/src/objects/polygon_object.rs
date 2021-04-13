@@ -1,17 +1,17 @@
-use crate::{geometry::models::Polygon, geometry::transform::Transform, obj_io::obj_file_reader::ObjFile, render::intersection::Intersection, geometry::ray::Ray, scene::scene_object::SceneObject};
-
+use crate::{geometry::models::Polygon, geometry::transform::Transform, obj_io::obj_file_reader::ObjFile, render::intersection::Intersection, geometry::ray::Ray, scene::scene_object::SceneObject, geometry::kdtree::KDTree, geometry::kdtree::build_tree};
 use super::triangle::Triangle;
 
 pub struct PolygonObject {
-
-    triangles: Vec<Triangle>,
+    kd_tree: KDTree,
+    // triangles: Vec<Triangle>,
 }
 
 impl PolygonObject {
 
     pub fn from_triangles(triangles: Vec<Triangle>) -> Self {
         Self {
-            triangles
+            // triangles
+            kd_tree: build_tree(triangles)
         }
     }
 
@@ -45,8 +45,8 @@ impl SceneObject for PolygonObject {
     fn check_intersection(&self, ray: &Ray) -> Option<Intersection> {
         let mut min_distance = f64::MAX;
         let mut best_intersection = None;
-
-        for triangle in &self.triangles {
+        let triangles = self.kd_tree.get_triangles(ray);
+        for triangle in triangles {
             if let Some(intersection) = triangle.check_intersection(ray) {
                 let intersection_distance = intersection.ray_distance();
                 

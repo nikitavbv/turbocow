@@ -1,4 +1,8 @@
-use crate::geometry::models::{Vector3, Polygon};
+use crate::geometry::vector3::Vector3;
+use crate::geometry::ray::Ray;
+use crate::objects::triangle::Triangle;
+
+const DELTA: f64 = 1e-6;
 
 pub struct BoundingBox {
     pub first: Vector3,
@@ -13,13 +17,9 @@ impl BoundingBox {
         }
     }
 
-    pub fn from_polygon(polygon: &Polygon) -> Self {
-        let vertices: Vec<&Vector3> = polygon
-            .get_vertices()
-            .into_iter()
-            .map(|x| x.get_geometry())
-            .collect();
-        println!("from_polygon: vertices: {:?}", vertices);
+    pub fn from_triangle(triangle: &Triangle) -> Self {
+        let vertices: Vec<&Vector3> = triangle
+            .get_vertices();
         let mut min_x = vertices[0].x;
         let mut min_y = vertices[0].y;
         let mut min_z = vertices[0].z;
@@ -42,13 +42,9 @@ impl BoundingBox {
         }
     }
 
-    pub fn extend(&mut self, polygon: &Polygon) {
-        let vertices: Vec<&Vector3> = polygon
-            .get_vertices()
-            .into_iter()
-            .map(|x| x.get_geometry())
-            .collect();
-        println!("extend: vertices: {:?}", vertices.len());
+    pub fn extend(&mut self, triangle: &Triangle) {
+        let vertices: Vec<&Vector3> = triangle
+            .get_vertices();
         let mut min_x = self.first.x;
         let mut min_y = self.first.y;
         let mut min_z = self.first.z;
@@ -71,8 +67,7 @@ impl BoundingBox {
 
 pub enum NodeType {
     Node(BoundingBox, Box<Vec<NodeType>>),
-    LeafNode(BoundingBox, Vec<Polygon>),
-    Empty
+    LeafNode(BoundingBox, Vec<Triangle>),
 }
 
 pub struct KDTree {
@@ -91,10 +86,8 @@ impl KDTree {
             Box::new(|vector| vector.x)
         } else if axis == 1 {
             Box::new(|vector| vector.y)
-        } else if axis == 2 {
-            Box::new(|vector| vector.z)
         } else {
-            panic!("unable to split: axis: {}", axis);
+            Box::new(|vector| vector.z)
         }
     }
 
@@ -108,41 +101,47 @@ impl KDTree {
         }
     }
 
-    fn split_box(bounding_box: &BoundingBox, polygons: Vec<Polygon>, split_axis: u8) -> Vec<NodeType> {
-        let min_x = bounding_box.first.x;
-        let max_x = bounding_box.second.x;
-        let x = (min_x + max_x) / (2 as f64);
+    fn split_box(bounding_box: &BoundingBox, triangles: Vec<Triangle>, split_axis: u8) -> Vec<NodeType> {
         let get_coorginate = KDTree::coordinate_fn(split_axis);
+        let min = get_coorginate(&bounding_box.first);
+        let max = get_coorginate(&bounding_box.second);
+        let v = (min + max) / (2 as f64);
         let mut left = Vec::new();
         let mut middle = Vec::new();
         let mut right = Vec::new();
-        for polygon in polygons.into_iter() {
+        for triangle in triangles.into_iter() {
             match KDTree::determine_side(
-                get_coorginate(polygon.get_vertices()[0].get_geometry()),
-                get_coorginate(polygon.get_vertices()[1].get_geometry()),
-                get_coorginate(polygon.get_vertices()[2].get_geometry()),
-                x
+                get_coorginate(triangle.get_vertices()[0]),
+                get_coorginate(triangle.get_vertices()[1]),
+                get_coorginate(triangle.get_vertices()[2]),
+                v
             ) {
-                Side::Left => left.push(polygon),
-                Side::Middle => middle.push(polygon),
-                Side::Right => right.push(polygon),
+                Side::Left => left.push(triangle),
+                Side::Middle => middle.push(triangle),
+                Side::Right => right.push(triangle),
             };
         }
-        vec![
-            NodeType::LeafNode(calculate_bounding_box(&left), left),
-            NodeType::LeafNode(calculate_bounding_box(&middle), middle),
-            NodeType::LeafNode(calculate_bounding_box(&right), right)
-        ]
+        let mut nodes = Vec::new();
+        if left.len() > 0 {
+            nodes.push(NodeType::LeafNode(calculate_bounding_box(&left), left));
+        }
+        if middle.len() > 0 {
+            nodes.push(NodeType::LeafNode(calculate_bounding_box(&middle), middle));
+        }
+        if right.len() > 0 {
+            nodes.push(NodeType::LeafNode(calculate_bounding_box(&right), right));
+        }
+        nodes
     }
 
     fn build_tree(node: NodeType, mut split_axis: u8) -> NodeType {
         match node {
             NodeType::Node(_, _) => node,
-            NodeType::LeafNode(bounding_box, polygons) => {
-                if polygons.len() < 8 {
-                    NodeType::LeafNode(bounding_box, polygons)
+            NodeType::LeafNode(bounding_box, triangles) => {
+                if triangles.len() < 8 {
+                    NodeType::LeafNode(bounding_box, triangles)
                 } else {
-                    let childs = KDTree::split_box(&bounding_box, polygons, split_axis)
+                    let childs = KDTree::split_box(&bounding_box, triangles, split_axis)
                         .into_iter();
                     split_axis = (split_axis + 1) % 3;
                     let childs = childs.map(|child| KDTree::build_tree(child, split_axis))
@@ -150,75 +149,180 @@ impl KDTree {
                     NodeType::Node(bounding_box, Box::new(childs))
                 }
             },
-            NodeType::Empty => node,
         }
     }
 
-    pub fn build(bounding_box: BoundingBox, polygons: Vec<Polygon>) -> Self {
+    pub fn build(bounding_box: BoundingBox, triangles: Vec<Triangle>) -> Self {
         KDTree {
-            node: KDTree::build_tree(NodeType::LeafNode(bounding_box, polygons), 0)
+            node: KDTree::build_tree(NodeType::LeafNode(bounding_box, triangles), 0)
         }
+    }
+
+    fn check_intersection(&self, bounding_box: &BoundingBox, ray: &Ray) -> bool {
+        let direction = ray.direction();
+        let origin = ray.origin();
+        let x = axis_direction(direction.x);
+        let y = axis_direction(direction.y);
+        let z = axis_direction(direction.z);
+        let lower_bounds = bounding_box.first;
+        let upper_bounds = bounding_box.second;
+
+        let (t_min, t_max) = if direction.x >= 0.0 {
+            (
+                (lower_bounds.x - origin.x) * x,
+                (upper_bounds.x - origin.x) * x,
+            )
+        } else {
+            (
+                (upper_bounds.x - origin.x) * x,
+                (lower_bounds.x - origin.x) * x,
+            )
+        };
+
+        let (ty_min, ty_max) = if direction.y >= 0.0 {
+            (
+                (lower_bounds.y - origin.y) * y,
+                (upper_bounds.y - origin.y) * y,
+            )
+        } else {
+            (
+                (upper_bounds.y - origin.y) * y,
+                (lower_bounds.y - origin.y) * y,
+            )
+        };
+
+        if t_min > ty_max || ty_min > t_max {
+            return false;
+        }
+        
+        let t_min = ty_min.max(t_min);
+        let t_max = ty_max.min(t_max);
+
+        let (tz_min, tz_max) = if direction.z >= 0.0 {
+            (
+                (lower_bounds.z - origin.z) * z,
+                (upper_bounds.z - origin.z) * z,
+            )
+        } else {
+            (
+                (upper_bounds.z - origin.z) * z,
+                (lower_bounds.z - origin.z) * z,
+            )
+        };
+
+        if t_min > tz_max || tz_min > t_max {
+            return false;
+        }
+
+        let t_min = tz_min.max(t_min);
+        let t_max = tz_max.min(t_max);
+
+        if t_min < 0.0 && t_max < 0.0 {
+            return false;
+        }
+        true
+    }
+
+    fn find_triangles(&self, node: &NodeType, ray: &Ray) -> Vec<Triangle> {
+        match node {
+            NodeType::Node(bounding_box, nodes) => {
+                if self.check_intersection(bounding_box, ray) {
+                    let mut triangles = Vec::new();
+                    for node in nodes.iter() {
+                        triangles.extend_from_slice(&self.find_triangles(node, ray)[0..]);
+                    }
+                    triangles
+                } else {
+                    Vec::new()
+                }
+            },
+            NodeType::LeafNode(bounding_box, triangles) => {
+                if self.check_intersection(bounding_box, ray) {
+                    triangles.clone()
+                } else {
+                    Vec::new()
+                }
+            },
+        }
+    }
+
+    pub fn get_triangles(&self, ray: &Ray) -> Vec<Triangle> {
+        self.find_triangles(&self.node, ray)
     }
 }
 
-fn calculate_bounding_box(polygons: &Vec<Polygon>) -> BoundingBox {
-    let mut bounding_box = BoundingBox::from_polygon(&polygons[0]);
-    for i in 1..polygons.len() {
-        bounding_box.extend(&polygons[i]);
+fn axis_direction(val: f64) -> f64 {
+    if val.abs() < DELTA {
+        if val >= 0.0 {
+            1.0 / DELTA
+        } else {
+            -1.0 / DELTA
+        }
+    } else {
+        1.0 / val
+    }
+}
+
+fn calculate_bounding_box(triangles: &Vec<Triangle>) -> BoundingBox {
+    let mut bounding_box = BoundingBox::from_triangle(&triangles[0]);
+    for i in 1..triangles.len() {
+        bounding_box.extend(&triangles[i]);
     }
     bounding_box
 }
 
-pub fn build_tree(polygons: Vec<Polygon>) -> KDTree {
-    KDTree::build(calculate_bounding_box(&polygons), polygons)
+pub fn build_tree(triangles: Vec<Triangle>) -> KDTree {
+    KDTree::build(calculate_bounding_box(&triangles), triangles)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::geometry::models::{Vector3, Vertex, Polygon};
+    use crate::geometry::vector3::Vector3;
     use crate::geometry::kdtree::BoundingBox;
+    use crate::objects::triangle::Triangle;
+    use crate::geometry::transform::Transform;
 
     #[test]
     fn test_bounding_box_from_polygon() {
-        let v1 = Vertex::new(Vector3::new(2.6, -3.0, 2.0), Vector3::zero());
-        let v2 = Vertex::new(Vector3::new(1.3, 1.5, 2.9), Vector3::zero());
-        let v3 = Vertex::new(Vector3::new(-0.8, 0.6, 3.3), Vector3::zero());
-        let polygon = Polygon::new(vec![v1, v2, v3]);
-        let bounding_box = BoundingBox::from_polygon(&polygon);
+        let v1 = Vector3::new(2.6, -3.0, 2.0);
+        let v2 = Vector3::new(1.3, 1.5, 2.9);
+        let v3 = Vector3::new(-0.8, 0.6, 3.3);
+        let triangle = Triangle::new(Transform::default(), v1, v2, v3);
+        let bounding_box = BoundingBox::from_triangle(&triangle);
         assert_eq!(bounding_box.first, Vector3::new(-0.8, -3.0, 2.0));
         assert_eq!(bounding_box.second, Vector3::new(2.6, 1.5, 3.3));
     }
 
     #[test]
     fn test_bounding_box_extend1() {
-        let v1 = Vertex::new(Vector3::new(2.6, -3.0, 2.0), Vector3::zero());
-        let v2 = Vertex::new(Vector3::new(1.3, 1.5, 2.9), Vector3::zero());
-        let v3 = Vertex::new(Vector3::new(-0.8, 0.6, 3.3), Vector3::zero());
-        let polygon = Polygon::new(vec![v1, v2, v3]);
-        let mut bounding_box = BoundingBox::from_polygon(&polygon);
+        let v1 = Vector3::new(2.6, -3.0, 2.0);
+        let v2 = Vector3::new(1.3, 1.5, 2.9);
+        let v3 = Vector3::new(-0.8, 0.6, 3.3);
+        let triangle = Triangle::new(Transform::default(), v1, v2, v3);
+        let bounding_box = BoundingBox::from_triangle(&triangle);
         
-        let v1 = Vertex::new(Vector3::new(1.8, -3.5, 2.0), Vector3::zero());
-        let v2 = Vertex::new(Vector3::new(1.3, 1.6, 1.1), Vector3::zero());
-        let v3 = Vertex::new(Vector3::new(-0.4, 0.5, 3.15), Vector3::zero());
-        let polygon = Polygon::new(vec![v1, v2, v3]);
-        bounding_box.extend(&polygon);
+        let v1 = Vector3::new(1.8, -3.5, 2.0);
+        let v2 = Vector3::new(1.3, 1.6, 1.1);
+        let v3 = Vector3::new(-0.4, 0.5, 3.15);
+        let triangle = Triangle::new(Transform::default(), v1, v2, v3);
+        bounding_box.extend(&triangle);
         assert_eq!(bounding_box.first, Vector3::new(-0.8, -3.5, 1.1));
         assert_eq!(bounding_box.second, Vector3::new(2.6, 1.6, 3.3));
     }
 
     #[test]
     fn test_bounding_box_extend2() {
-        let v1 = Vertex::new(Vector3::new(2.6, -3.0, 2.0), Vector3::zero());
-        let v2 = Vertex::new(Vector3::new(1.3, 1.5, 2.9), Vector3::zero());
-        let v3 = Vertex::new(Vector3::new(-0.8, 0.6, 3.3), Vector3::zero());
-        let polygon = Polygon::new(vec![v1, v2, v3]);
-        let mut bounding_box = BoundingBox::from_polygon(&polygon);
+        let v1 = Vector3::new(2.6, -3.0, 2.0);
+        let v2 = Vector3::new(1.3, 1.5, 2.9);
+        let v3 = Vector3::new(-0.8, 0.6, 3.3);
+        let triangle = Triangle::new(Transform::default(), v1, v2, v3);
+        let bounding_box = BoundingBox::from_triangle(&triangle);
         
-        let v1 = Vertex::new(Vector3::new(2.0, -2.8, 2.2), Vector3::zero());
-        let v2 = Vertex::new(Vector3::new(0.9, 0.75, 3.0), Vector3::zero());
-        let v3 = Vertex::new(Vector3::new(-0.5, 0.1, 2.5), Vector3::zero());
-        let polygon = Polygon::new(vec![v1, v2, v3]);
-        bounding_box.extend(&polygon);
+        let v1 = Vector3::new(2.0, -2.8, 2.2);
+        let v2 = Vector3::new(0.9, 0.75, 3.0);
+        let v3 = Vector3::new(-0.5, 0.1, 2.5);
+        let triangle = Triangle::new(Transform::default(), v1, v2, v3);
+        bounding_box.extend(&triangle);
         assert_eq!(bounding_box.first, Vector3::new(-0.8, -3.0, 2.0));
         assert_eq!(bounding_box.second, Vector3::new(2.6, 1.5, 3.3));
     }

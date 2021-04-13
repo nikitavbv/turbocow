@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{BufReader, BufRead};
-use crate::geometry::models::{Vector3, Vertex, Polygon};
+use crate::geometry::models::{Vertex, Polygon};
+use crate::geometry::vector3::Vector3;
 use custom_error::custom_error;
 
 custom_error! {pub ObjFileError

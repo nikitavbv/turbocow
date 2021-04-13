@@ -2,6 +2,7 @@ use crate::{render::intersection::Intersection, geometry::{ray::Ray, transform::
 
 const DELTA: f64 = 1e-6;
 
+#[derive(Clone)]
 pub struct Triangle {
 
     transform: Transform,
@@ -38,6 +39,10 @@ impl Triangle {
             v0v1,
             v0v2,
         }
+    }
+
+    pub fn get_vertices(&self) -> Vec<&Vector3> {
+        vec![&self.v0, &self.v1, &self.v2]
     }
 }
 
