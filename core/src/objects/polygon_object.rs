@@ -3,14 +3,12 @@ use super::triangle::Triangle;
 
 pub struct PolygonObject {
     kd_tree: KDTree,
-    // triangles: Vec<Triangle>,
 }
 
 impl PolygonObject {
 
     pub fn from_triangles(triangles: Vec<Triangle>) -> Self {
         Self {
-            // triangles
             kd_tree: build_tree(triangles)
         }
     }
