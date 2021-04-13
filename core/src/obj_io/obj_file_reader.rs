@@ -18,12 +18,17 @@ pub struct ObjFile {
 }
 
 impl ObjFile {
+
     pub const fn new() -> Self {
         ObjFile {
             vertices: Vec::new(),
             vertices_normals: Vec::new(),
             polygons: Vec::new(),
         }
+    }
+
+    pub fn polygons(&self) -> &Vec<Polygon> {
+        &self.polygons
     }
 
     pub fn load(&mut self, filename: &str) -> Result<(), ObjFileError> {
@@ -185,7 +190,9 @@ impl ObjFile {
 
 #[cfg(test)]
 mod tests {
-    use crate::obj::obj_file_reader::ObjFile;
+    
+    use super::*;
+
     #[test]
     fn test1() {
         let mut model = ObjFile::new();
