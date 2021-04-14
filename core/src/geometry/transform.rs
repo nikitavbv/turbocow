@@ -1,5 +1,6 @@
 use super::{matrix::Matrix44, vector3::Vector3};
 
+#[derive(Clone)]
 pub struct Transform {
 
     position: Vector3,

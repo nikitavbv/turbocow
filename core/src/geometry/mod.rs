@@ -1,3 +1,4 @@
+pub mod kdtree;
 pub mod matrix;
 pub mod models;
 pub mod ray;

@@ -1,6 +1,6 @@
 use super::vector3::Vector3;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Vertex {
     geometry: Vector3,
     normal: Vector3,
@@ -17,7 +17,7 @@ impl Vertex {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Polygon {
     vertices: Vec<Vertex>,
 }

@@ -1,5 +1,6 @@
 use super::vector3::Vector3;
 
+#[derive(Clone)]
 pub struct Matrix44 {
 
     values: [[f64; 4]; 4],
