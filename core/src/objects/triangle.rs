@@ -41,8 +41,8 @@ impl Triangle {
         }
     }
 
-    pub fn get_vertices(&self) -> Vec<&Vector3> {
-        vec![&self.v0, &self.v1, &self.v2]
+    pub fn get_vertices(&self) -> [&Vector3; 3] {
+        [&self.v0, &self.v1, &self.v2]
     }
 }
 

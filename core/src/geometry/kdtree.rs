@@ -18,8 +18,7 @@ impl BoundingBox {
     }
 
     pub fn from_triangle(triangle: &Triangle) -> Self {
-        let vertices: Vec<&Vector3> = triangle
-            .get_vertices();
+        let vertices = triangle.get_vertices();
         let mut min_x = vertices[0].x;
         let mut min_y = vertices[0].y;
         let mut min_z = vertices[0].z;
@@ -43,8 +42,7 @@ impl BoundingBox {
     }
 
     pub fn extend(&mut self, triangle: &Triangle) {
-        let vertices: Vec<&Vector3> = triangle
-            .get_vertices();
+        let vertices = triangle.get_vertices();
         let mut min_x = self.first.x;
         let mut min_y = self.first.y;
         let mut min_z = self.first.z;

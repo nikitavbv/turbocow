@@ -28,7 +28,7 @@ impl PolygonObject {
                 triangles.push(Triangle::new(
                     Transform::default(), 
                     pillar.clone(), 
-                    ver[i].geometry().clone(), 
+                    ver[i].geometry().clone(),
                     ver[i + 1].geometry().clone()
                 ));
             }
