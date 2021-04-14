@@ -1,4 +1,6 @@
-use crate::{models::image::Image, scene::scene::Scene};
+use turbocow_core::models::image::Image;
+
+use crate::scene::scene::Scene;
 
 pub trait Render {
 

@@ -1,26 +1,26 @@
-.core:
+.turbocow:
   variables:
-    CRATE_NAME: core
-    IMAGE_NAME: core
+    CRATE_NAME: turbocow
+    IMAGE_NAME: turbocow
   only:
     changes:
-      - core/**/*
+      - turbocow/**/*
       - images/service.Dockerfile
       - ci/templates.yml
       - ci/core.yml
 
-core test:
+turbocow test:
   extends: 
     - .cargo_test
-    - .core
+    - .turbocow
 
-core build:
+turbocow build:
   extends:
     - .cargo_build_executable
-    - .core
+    - .turbocow
 
-core image:
+turbocow image:
   extends: 
     - .service_build
     - .core
-  needs: ['core test', 'core build']
+  needs: ['turbocow test', 'turbocow build']
