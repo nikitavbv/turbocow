@@ -13,5 +13,5 @@ include:
   - local: 'ci/gif_support.yml'
   - local: 'ci/jpeg_support.yml'
   - local: 'ci/png_support.yml'
-  - local: 'ci/core.yml'
+  - local: 'ci/turbocow.yml'
   - local: 'ci/converter.yml'
