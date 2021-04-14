@@ -1,7 +1,9 @@
 use rayon::prelude::*;
 
-use crate::{models::pixel::Pixel, geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_object::SceneObject}};
-use crate::models::image::Image;
+use turbocow_core::models::pixel::Pixel;
+use turbocow_core::models::image::Image;
+
+use crate::{geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_object::SceneObject}};
 
 use super::render::Render;
 

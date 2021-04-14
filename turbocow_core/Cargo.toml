@@ -1,19 +1,16 @@
 [package]
-name = "core"
+name = "turbocow_core"
 version = "0.1.0"
 authors = ["Nikita Volobuev <nikitavbv@gmail.com>", "Pavlo Myroniuk <pspos.developqkation@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-libloading = "0.7.0"
 custom_error = "1.8.0"
+libloading = "0.7.0"
 log = "0.4.0"
-env_logger = "0.8.3"
-regex = "1"
+colour = "0.6.0"
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 openssl = { version = "0.10.29", features = ["vendored"] }
-colour = "0.6.0"
-rayon = "1.5.0"
 
 [profile.release]
 opt-level = 3

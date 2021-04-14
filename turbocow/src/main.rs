@@ -2,30 +2,27 @@
 
 #[macro_use] 
 extern crate log;
-extern crate libloading;
 extern crate custom_error;
-extern crate colour;
 
 pub mod geometry;
-pub mod models;
 pub mod obj_io;
 pub mod objects;
 pub mod render;
 pub mod scene;
-pub mod plugins;
-pub mod utils;
 
 use std::path::Path;
 use std::fs;
 
 use env_logger::Env;
 
+use turbocow_core::utils::print_intro;
+use turbocow_core::models::image::Image;
+use turbocow_core::plugins::resolver::PluginResolver;
+use turbocow_core::models::io::ImageWriterOptions;
+
 use geometry::{transform::Transform, vector3::Vector3};
-use models::image::Image;
 use obj_io::obj_file_reader::ObjFile;
 use objects::polygon_object::PolygonObject;
-use plugins::resolver::PluginResolver;
-use models::io::ImageWriterOptions;
 use render::{multithreaded::MultithreadedRender, render::Render};
 use scene::{scene::Scene, camera::Camera};
 use crate::render::basic::BasicRender;
@@ -34,7 +31,7 @@ const DEFAULT_LOGGING_LEVEL: &str = "info";
 
 fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or(DEFAULT_LOGGING_LEVEL)).init();
-    utils::print_intro();
+    print_intro();
 
     let mut plugin_resolver = PluginResolver::new(box Path::new("plugins"))
         .expect("Failed to init plugin resolver");
