@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use custom_error::custom_error;
 use byteorder::{ByteOrder, LittleEndian};
 
-use core::models::{image::Image, io::{ImageIOError, ImageReader}, pixel::Pixel};
+use turbocow_core::models::{image::Image, io::{ImageIOError, ImageReader}, pixel::Pixel};
 
 use crate::common::{Compression, DIBHeader, offset_to_far_right};
 

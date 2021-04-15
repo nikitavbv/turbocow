@@ -2,7 +2,7 @@
 
 extern crate custom_error;
 
-use core::{plugins::ImageFormatSupportPlugin, models::io::{ImageReader, ImageWriter}};
+use turbocow_core::{plugins::plugins::ImageFormatSupportPlugin, models::io::{ImageReader, ImageWriter}};
 
 use reader::BMPReader;
 use writer::BMPWriter;

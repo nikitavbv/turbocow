@@ -1,9 +1,12 @@
 use turbocow_core::models::pixel::Pixel;
 use turbocow_core::models::image::Image;
+use livestonk::Component;
+
 use crate::{geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_object::SceneObject}};
 
 use super::render::Render;
 
+#[derive(Component)]
 pub struct BasicRender {
 }
 
@@ -29,7 +32,6 @@ impl Render for BasicRender {
         let transformed_origin = transform.apply_for_point(transform.position());
 
         for y in 0..height {
-            println!("y is {}", y);
             let normalized_y = 1.0 - 2.0 * (y as f64 + 0.5) / height as f64;
             let camera_y = normalized_y * field_of_view;
 

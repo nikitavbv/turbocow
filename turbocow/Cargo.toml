@@ -8,6 +8,8 @@ edition = "2018"
 
 [dependencies]
 turbocow_core = { path = "../turbocow_core" }
+livestonk = { path = "../livestonk" }
+bmp_support = { path = "../bmp_support" }
 custom_error = "1.8.0"
 log = "0.4.0"
 env_logger = "0.8.3"

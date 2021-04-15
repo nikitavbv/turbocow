@@ -1,8 +1,12 @@
 use std::fs::File;
 use std::io::{BufReader, BufRead};
+
+use livestonk::Component;
+
 use crate::geometry::models::{Vertex, Polygon};
 use crate::geometry::vector3::Vector3;
 use custom_error::custom_error;
+use crate::io::traits::{ModelLoader, Model, TurbocowIOError};
 
 custom_error! {pub ObjFileError
     ParseError {description: String} = "Failed to parse line: {description}",
@@ -27,12 +31,22 @@ impl ObjFile {
             polygons: Vec::new(),
         }
     }
+}
 
-    pub fn polygons(&self) -> &Vec<Polygon> {
+impl Model for ObjFile {
+
+    fn polygons(&self) -> &Vec<Polygon> {
         &self.polygons
     }
+}
 
-    pub fn load(&mut self, filename: &str) -> Result<(), ObjFileError> {
+#[derive(Component)]
+pub(crate) struct ObjFileLoader {
+}
+
+impl ObjFileLoader {
+
+    fn load(obj_file: &mut ObjFile, filename: &str) -> Result<(), ObjFileError> {
         let vertex_normal = "vn";
         let vertex = "v";
         let comment = "#";
@@ -50,11 +64,11 @@ impl ObjFile {
             if line_data.len() == 0 || line_data.starts_with(comment) {
                 continue;
             } else if line_data.starts_with(vertex_normal) {
-                self.parse_vertex_normal(line_data)?;
+                Self::parse_vertex_normal(obj_file, line_data)?;
             } else if line_data.starts_with(vertex) {
-                self.parse_vertex(line_data)?;
+                Self::parse_vertex(obj_file, line_data)?;
             } else if line_data.starts_with(face) {
-                self.parse_face(line_data)?;
+                Self::parse_face(obj_file, line_data)?;
             } else if line_data.starts_with(group) {
                 log:: trace!("group name(s): {}", &line_data[2..]);
             } else if line_data.starts_with(material) {
@@ -94,8 +108,8 @@ impl ObjFile {
         res
     }
 
-    fn parse_vertex_normal(&mut self, line: String) -> Result<(), ObjFileError> {
-        let values = ObjFile::split_line(&line[2..]);
+    fn parse_vertex_normal(file: &mut ObjFile, line: String) -> Result<(), ObjFileError> {
+        let values = Self::split_line(&line[2..]);
         let mut values = values.iter();
         let x = values.next();
         if x.is_none() {
@@ -124,12 +138,12 @@ impl ObjFile {
         let z = z.unwrap().parse::<f64>().map_err(|err| ObjFileError::VertexNormalError {
             description: format!("Unable to parse third coordinate: {}. Cause: {:?}", &line, err)
         })?;
-        self.vertices_normals.push(Vector3::new(x, y, z));
+        file.vertices_normals.push(Vector3::new(x, y, z));
         Result::Ok(())
     }
 
-    fn parse_vertex(&mut self, line: String) -> Result<(), ObjFileError> {
-        let values = ObjFile::split_line(&line[1..]);
+    fn parse_vertex(file: &mut ObjFile, line: String) -> Result<(), ObjFileError> {
+        let values = Self::split_line(&line[1..]);
         let mut values = values.iter();
         let x = values.next();
         if x.is_none() {
@@ -158,12 +172,12 @@ impl ObjFile {
         let z = z.unwrap().parse::<f64>().map_err(|err| ObjFileError::VertexNormalError {
             description: format!("Unable to parse third coordinate: {}. Cause: {:?}", &line, err)
         })?;
-        self.vertices.push(Vector3::new(x, y, z));
+        file.vertices.push(Vector3::new(x, y, z));
         Result::Ok(())
     }
 
-    fn parse_face(&mut self, line: String) -> Result<(), ObjFileError> {
-        let values = ObjFile::split_line(&line[1..]);
+    fn parse_face(file: &mut ObjFile, line: String) -> Result<(), ObjFileError> {
+        let values = Self::split_line(&line[1..]);
         let mut values = values.iter();
         let mut vertices = Vec::new();
         for _ in 0..3 {
@@ -176,16 +190,28 @@ impl ObjFile {
                     let vertex_normal = vn.parse::<usize>().map_err(|err| ObjFileError::FaceError {
                         description: format!("Unable to parse vertex normal number for face: {}. Cause: {:?}", line, err)
                     })?;
-                    vertices.push(Vertex::new(self.vertices[vertex_number - 1], self.vertices_normals[vertex_normal - 1]));
+                    vertices.push(Vertex::new(file.vertices[vertex_number - 1], file.vertices_normals[vertex_normal - 1]));
                 } else {
-                    vertices.push(Vertex::new(self.vertices[vertex_number - 1], Vector3::zero()));
+                    vertices.push(Vertex::new(file.vertices[vertex_number - 1], Vector3::zero()));
                 }
             } else {
-                vertices.push(Vertex::new(self.vertices[vertex_number - 1], Vector3::zero()));
+                vertices.push(Vertex::new(file.vertices[vertex_number - 1], Vector3::zero()));
             }
         }
-        self.polygons.push(Polygon::new(vertices));
+        file.polygons.push(Polygon::new(vertices));
         Result::Ok(())
+    }
+}
+
+impl ModelLoader for ObjFileLoader {
+
+    fn load(&self, path: &str) -> Result<Box<dyn Model>, TurbocowIOError> {
+        let mut file = ObjFile::new();
+        Self::load(&mut file,path)
+            .map(|_| box file as Box<dyn Model>)
+            .map_err(|err| TurbocowIOError::FailedToLoad {
+                description: format!("obj file error: {}", err)
+            })
     }
 }
 
