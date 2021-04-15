@@ -47,7 +47,11 @@ impl Triangle {
 }
 
 impl SceneObject for Triangle {
-    
+
+    fn transform(&self) -> &Transform {
+        &self.transform
+    }
+
     fn check_intersection(&self, ray: &Ray) -> Option<Intersection> {
         let v0 = &self.v0_applied;
         let v0v1 = &self.v0v1;
@@ -82,6 +86,6 @@ impl SceneObject for Triangle {
             return None;
         }
 
-        return Some(Intersection::new(ray_distance))
+        return Some(Intersection::new(ray_distance, Some(self.v0v1.cross_product(&self.v0v2).normalized())))
     }
 }

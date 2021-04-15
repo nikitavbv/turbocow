@@ -21,4 +21,8 @@ impl Ray {
     pub fn direction(&self) -> &Vector3 {
         &self.direction
     }
+
+    pub fn point(&self, distance: f64) -> Vector3 {
+        self.origin + self.direction * distance
+    }
 }

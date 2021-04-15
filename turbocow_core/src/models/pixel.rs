@@ -1,3 +1,5 @@
+use std::ops::Mul;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Pixel {
     pub red: u8,
@@ -45,5 +47,19 @@ impl Pixel {
 
     pub fn with_alpha_channel(&self, alpha: u8) -> Self {
         Self::from_rgba(self.red, self.green, self.blue, alpha)
+    }
+}
+
+impl Mul<f64> for Pixel {
+
+    type Output = Pixel;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        Pixel::from_rgba(
+            (self.red as f64 * rhs).round() as u8,
+            (self.green as f64 * rhs).round() as u8, 
+            (self.blue as f64 * rhs).round() as u8, 
+            (self.alpha as f64 * rhs).round() as u8
+        )
     }
 }

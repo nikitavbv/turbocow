@@ -1,3 +1,5 @@
+use core::f64::consts::PI;
+
 use turbocow_core::models::pixel::Pixel;
 use turbocow_core::models::image::Image;
 use livestonk::Component;
@@ -5,6 +7,7 @@ use livestonk::Component;
 use crate::{geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_object::SceneObject}};
 
 use super::render::Render;
+use crate::render::intersection::Intersection;
 
 #[derive(Component)]
 pub struct BasicRender {
@@ -41,31 +44,62 @@ impl Render for BasicRender {
 
                 let direction = Vector3::new(camera_x, camera_y, -1.0).normalized();
 
-                let ray = Ray::new(transformed_origin, transform.apply_for_vector(&direction).normalized());
-
-                let intersect_object = find_intersection(&ray, &scene);
-                render_to.set_pixel(x, y, if intersect_object.is_some() {
-                    Pixel::from_rgb(255, 0, 0)
-                } else {
-                    Pixel::black()
-                });
+                let ray = Ray::new(
+                    transformed_origin,
+                    transform.apply_for_vector(&direction).normalized()
+                );
+                render_to.set_pixel(x, y, render_ray(&ray, &scene));
             }
         }
     }
 }
 
-fn find_intersection<'a>(ray: &Ray, scene: &'a Scene) -> Option<&'a Box<dyn SceneObject + Sync + Send>> {
+fn render_ray(ray: &Ray, scene: &Scene) -> Pixel {
+    let intersect_obj = find_intersection(&ray, &scene);
+
+    if intersect_obj.is_none() {
+        return Pixel::black();
+    }
+    let (intersect_obj, intersection) = intersect_obj.unwrap();
+
+    if scene.lights().len() == 0 {
+        return intersect_obj.color();
+    }
+
+    let mut intensity = 0.0;
+
+    for light in scene.lights() {
+        let hit_point = ray.point(intersection.ray_distance());
+        let hit_normal = intersection.normal();
+        let bias = 0.001;
+
+        let ray_to_light = Ray::new(hit_point + hit_normal * bias, light.transform().rotation() * -1.0);
+
+        if find_intersection(&ray_to_light, scene).is_none() {
+            intensity += intersect_obj.albedo() / PI * light.illuminate(
+                &hit_normal,
+                light.transform().position().distance_to(intersect_obj.transform().position())
+            );
+        }
+    }
+
+    intersect_obj.color() * intensity.min(1.0)
+}
+
+fn find_intersection<'a>(ray: &Ray, scene: &'a Scene) -> Option<(&'a Box<dyn SceneObject + Sync + Send>, Intersection)> {
     let mut result = None;
     let mut min_distance = f64::MAX;
+    let mut result_intersection = None;
 
     for object in scene.objects() {
         if let Some(intersection) = object.check_intersection(&ray) {
             if intersection.ray_distance() < min_distance {
                 min_distance = intersection.ray_distance();
                 result = Some(object);
+                result_intersection = Some(intersection);
             }
         }
     }
 
-    result
+    result.map(|v| (v, result_intersection.unwrap()))
 }

@@ -24,6 +24,10 @@ impl Vector3 {
     }
 
     pub fn length(&self) -> f64 {
+        self.length_squared().sqrt()
+    }
+
+    pub fn length_squared(&self) -> f64 {
         self.x * self.x + self.y * self.y + self.z * self.z
     }
 
@@ -50,6 +54,10 @@ impl Vector3 {
             self.z * other.x - self.x * other.z,
             self.x * other.y - self.y * other.x
         )
+    }
+
+    pub fn distance_to(&self, other: &Vector3) -> f64 {
+        (self - other).length()
     }
 }
 
@@ -107,5 +115,14 @@ impl Mul<f64> for Vector3 {
 
     fn mul(self, rhs: f64) -> Self::Output {
         Vector3::new(self.x * rhs,self.y * rhs, self.z * rhs)
+    }
+}
+
+impl Mul<f64> for &Vector3 {
+
+    type Output = Vector3;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        Vector3::new(self.x * rhs, self.y * rhs, self.z * rhs)
     }
 }
