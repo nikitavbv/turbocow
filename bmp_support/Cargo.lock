@@ -25,8 +25,8 @@ name = "bmp_support"
 version = "0.1.0"
 dependencies = [
  "byteorder",
- "core",
  "custom_error",
+ "turbocow_core",
 ]
 
 [[package]]
@@ -66,18 +66,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a27e4532f26f510c24bb8477d963c0c3ef27e293c3b2c507cccb0536d493201a"
 dependencies = [
  "crossterm",
-]
-
-[[package]]
-name = "core"
-version = "0.1.0"
-dependencies = [
- "colour",
- "custom_error",
- "libloading",
- "log",
- "openssl",
- "reqwest",
 ]
 
 [[package]]
@@ -960,6 +948,18 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
+
+[[package]]
+name = "turbocow_core"
+version = "0.1.0"
+dependencies = [
+ "colour",
+ "custom_error",
+ "libloading",
+ "log",
+ "openssl",
+ "reqwest",
+]
 
 [[package]]
 name = "unicode-bidi"

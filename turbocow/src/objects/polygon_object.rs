@@ -1,4 +1,4 @@
-use crate::{geometry::models::Polygon, geometry::transform::Transform, obj_io::obj_file_reader::ObjFile, render::intersection::Intersection, geometry::ray::Ray, scene::scene_object::SceneObject, geometry::kdtree::KDTree, geometry::kdtree::build_tree};
+use crate::{geometry::models::Polygon, geometry::transform::Transform, io::traits::Model, render::intersection::Intersection, geometry::ray::Ray, scene::scene_object::SceneObject, geometry::kdtree::KDTree, geometry::kdtree::build_tree};
 use super::triangle::Triangle;
 
 pub struct PolygonObject {
@@ -13,7 +13,7 @@ impl PolygonObject {
         }
     }
 
-    pub fn from_obj_file(file: &ObjFile) -> Self {
+    pub fn from_model(file: &Box<dyn Model>) -> Self {
         Self::from_polygons(file.polygons())
     }
 

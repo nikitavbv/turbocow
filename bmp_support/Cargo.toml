@@ -5,9 +5,10 @@ authors = ["Nikita Volobuev <nikitavbv@gmail.com>", "Pavlo Myroniuk <pspos.devel
 edition = "2018"
 
 [lib]
-crate-type = ["cdylib"]
+# Building dynamic libraries is temporary disabled. If we need dynamic libraries later, we would better create a wrapper crate for each library.
+# crate-type = ["cdylib"]
 
 [dependencies]
-core = { path = "../core" }
+turbocow_core = { path = "../turbocow_core" }
 custom_error = "1.8.0"
 byteorder = "1.4.2"

@@ -1,5 +1,7 @@
 use std::ops::{Add, Mul, Sub};
 
+const DELTA: f64 = 1e-5;
+
 #[derive(Copy, Clone, Debug)]
 pub struct Vector3 {
     pub x: f64,
@@ -50,6 +52,18 @@ impl Vector3 {
         )
     }
 }
+
+impl PartialEq for Vector3 {
+
+    fn eq(&self, other: &Self) -> bool {
+        (&self.x - other.x).abs() < DELTA && 
+            (self.y - other.y).abs() < DELTA && 
+            (self.z - other.z).abs() < DELTA
+    }
+}
+
+
+impl Eq for Vector3 {}
 
 impl Add for Vector3 {
     

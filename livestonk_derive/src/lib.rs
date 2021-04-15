@@ -15,7 +15,7 @@ pub fn init_component(ts: TokenStream) -> TokenStream {
     let field_name = fields.iter().map(|field| &field.ident);
 
     let res = quote! {
-        impl livestonk::Resolve<#struct_name> for livestonk::Livestonk {
+        impl crate::Resolve<#struct_name> for livestonk::Livestonk {
             fn resolve() -> Box<#struct_name> {
                 box #struct_name {
                     #(

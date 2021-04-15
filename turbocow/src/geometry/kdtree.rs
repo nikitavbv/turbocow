@@ -297,7 +297,7 @@ mod tests {
         let v2 = Vector3::new(1.3, 1.5, 2.9);
         let v3 = Vector3::new(-0.8, 0.6, 3.3);
         let triangle = Triangle::new(Transform::default(), v1, v2, v3);
-        let bounding_box = BoundingBox::from_triangle(&triangle);
+        let mut bounding_box = BoundingBox::from_triangle(&triangle);
         
         let v1 = Vector3::new(1.8, -3.5, 2.0);
         let v2 = Vector3::new(1.3, 1.6, 1.1);
@@ -314,7 +314,7 @@ mod tests {
         let v2 = Vector3::new(1.3, 1.5, 2.9);
         let v3 = Vector3::new(-0.8, 0.6, 3.3);
         let triangle = Triangle::new(Transform::default(), v1, v2, v3);
-        let bounding_box = BoundingBox::from_triangle(&triangle);
+        let mut bounding_box = BoundingBox::from_triangle(&triangle);
         
         let v1 = Vector3::new(2.0, -2.8, 2.2);
         let v2 = Vector3::new(0.9, 0.75, 3.0);

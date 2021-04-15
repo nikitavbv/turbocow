@@ -41,10 +41,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
+name = "bmp_support"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "custom_error",
+ "turbocow_core",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63396b8a4b9de3f4fdfb320ab6080762242f66a8ef174c49d8e19b674db4cdbe"
+
+[[package]]
+name = "byteorder"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
@@ -465,6 +480,21 @@ checksum = "6f84d96438c15fcd6c3f244c8fce01d1e2b9c6b5623e9c711dc9286d8fc92d6a"
 dependencies = [
  "cfg-if",
  "winapi",
+]
+
+[[package]]
+name = "livestonk"
+version = "0.1.0"
+dependencies = [
+ "livestonk_derive",
+]
+
+[[package]]
+name = "livestonk_derive"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1088,8 +1118,10 @@ checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 name = "turbocow"
 version = "0.1.0"
 dependencies = [
+ "bmp_support",
  "custom_error",
  "env_logger",
+ "livestonk",
  "log",
  "openssl",
  "rayon",

@@ -1,4 +1,4 @@
-use core::models::{image::Image, io::{ImageIOError, ImageWriter, ImageWriterOptions}, pixel::Pixel};
+use turbocow_core::models::{image::Image, io::{ImageIOError, ImageWriter, ImageWriterOptions}, pixel::Pixel};
 
 use byteorder::{LittleEndian, ByteOrder};
 
