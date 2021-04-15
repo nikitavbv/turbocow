@@ -23,8 +23,10 @@ impl Matrix44 {
         Self::new(values)
     }
 
-    pub fn for_transformation(translation: &Vector3) -> Self {
-        Self::empty().apply_translation(translation)
+    pub fn for_transformation(translation: &Vector3, rotation: &Vector3) -> Self {
+        Self::empty()
+            .apply_translation(translation)
+            .apply_rotation(rotation)
     }
 
     pub fn apply_translation(&self, translation: &Vector3) -> Matrix44 {
@@ -32,6 +34,21 @@ impl Matrix44 {
         values[0][3] = translation.x;
         values[1][3] = translation.y;
         values[2][3] = translation.z;
+        Matrix44::new(values)
+    }
+
+    pub fn apply_rotation(&self, rotation: &Vector3) -> Matrix44 {
+        let rot = apply_rotation_around_x(rotation.x);
+        let rot = multiply(rot, apply_rotation_around_y(rotation.y));
+        let rot = multiply(rot, apply_rotation_around_z(rotation.z));
+
+        let mut values = self.values.clone();
+        for i in 0..3 {
+            for j in 0..3 {
+                values[j][i] = rot[j][i];
+            }
+        }
+
         Matrix44::new(values)
     }
 
@@ -50,4 +67,57 @@ impl Matrix44 {
     pub fn translate(&self, vector: &Vector3) -> Vector3 {
         vector + &Vector3::new(self.values[0][3], self.values[1][3], self.values[2][3])
     }
+}
+
+fn apply_rotation_around_x(angle: f64) -> [[f64; 3]; 3] {
+    let angle = angle.to_radians();
+
+    let mut rotation = [[0f64; 3]; 3];
+    rotation[0][0] = 1.0;
+    rotation[1][1] = angle.cos();
+    rotation[1][2] = angle.sin();
+    rotation[2][1] = -angle.sin();
+    rotation[2][2] = angle.cos();
+
+    rotation
+}
+
+fn apply_rotation_around_y(angle: f64) -> [[f64; 3]; 3] {
+    let angle = angle.to_radians();
+
+    let mut rotation = [[0f64; 3]; 3];
+    rotation[1][1] = 1.0;
+    rotation[0][0] = angle.cos();
+    rotation[0][2] = -angle.sin();
+    rotation[2][0] = angle.sin();
+    rotation[2][2] = angle.cos();
+
+    rotation
+}
+
+fn apply_rotation_around_z(angle: f64) -> [[f64; 3]; 3] {
+    let angle = angle.to_radians();
+
+    let mut rotation = [[0f64; 3]; 3];
+    rotation[2][2] = 1.0;
+    rotation[0][0] = angle.cos();
+    rotation[0][1] = angle.sin();
+    rotation[1][0] = -angle.sin();
+    rotation[1][1] = angle.cos();
+
+    rotation
+}
+
+fn multiply(a: [[f64; 3]; 3], b: [[f64; 3]; 3]) -> [[f64; 3]; 3] {
+    let mut result = [[0f64; 3]; 3];
+
+    for i in 0..3 {
+        for j in 0..3 {
+            result[i][j] = a[i][0] * b[0][j]
+                + a[i][1] * b[1][j]
+                + a[i][2] * b[2][j];
+        }
+    }
+
+    result
 }

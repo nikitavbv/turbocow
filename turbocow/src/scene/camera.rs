@@ -8,15 +8,15 @@ pub struct Camera {
 
 impl Camera {
 
-    pub fn new(position: Vector3, size: f64) -> Self {
+    pub fn new(position: Vector3, rotation: Vector3, size: f64) -> Self {
         Self {
-            transform: Transform::new(&position),
+            transform: Transform::new(position, rotation),
             field_of_view: 2.0 * size.atan(),
         }
     }
 
     pub fn default() -> Self {
-        Self::new(Vector3::zero(), 1.0)
+        Self::new(Vector3::zero(), Vector3::zero(), 1.0)
     }
 
     pub fn with_transform(&self, transform: Transform) -> Self {

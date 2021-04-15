@@ -3,6 +3,7 @@ use crate::{geometry::{ray::Ray, transform::Transform}, render::intersection::In
 const DELTA: f64 = 1e-6;
 
 pub struct Cube {
+    transform: Transform,
     upper_bounds: Vector3,
     lower_bounds: Vector3,
 }
@@ -14,6 +15,7 @@ impl Cube {
         let lower_bounds = transform.position() - &(Vector3::one() * size * 0.5);
 
         Self {
+            transform,
             upper_bounds,
             lower_bounds,
         }
@@ -21,6 +23,10 @@ impl Cube {
 }
 
 impl SceneObject for Cube {
+
+    fn transform(&self) -> &Transform {
+        &self.transform
+    }
 
     fn check_intersection(&self, ray: &Ray) -> Option<Intersection> {
         let direction = ray.direction();
@@ -90,7 +96,7 @@ impl SceneObject for Cube {
             t_min
         };
 
-        Some(Intersection::new(t))
+        Some(Intersection::new(t, None))
     }
 }
 

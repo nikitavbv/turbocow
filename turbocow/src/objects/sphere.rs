@@ -1,5 +1,6 @@
 use crate::{geometry::{ray::Ray, transform::Transform}, render::intersection::Intersection};
 use crate::scene::scene_object::SceneObject;
+use crate::geometry::vector3::Vector3;
 
 pub struct Sphere {
 
@@ -18,7 +19,11 @@ impl Sphere {
 }
 
 impl SceneObject for Sphere {
-    
+
+    fn transform(&self) -> &Transform {
+        &self.transform
+    }
+
     fn check_intersection(&self, ray: &Ray) -> Option<Intersection> {
         // Ray(t) = origin + t * direction
         // Spehere: (x - center_x)**2 + (y - center_y)**2 + (z - center_z)**2 = radius**2
@@ -45,6 +50,22 @@ impl SceneObject for Sphere {
             return None;
         }
 
-        Some(Intersection::new(0.0))
+        let first_intersection = (-b + discriminant.sqrt()) / (2.0 * a);
+        let second_intersection = (-b - discriminant.sqrt()) / (2.0 * a);
+
+        if first_intersection < 0.0 && second_intersection < 0.0 {
+            return None;
+        }
+
+        let t = if first_intersection < 0.0 && second_intersection >= 0.0 {
+            second_intersection
+        } else if first_intersection >= 0.0 && first_intersection < 0.0 {
+            first_intersection
+        } else {
+            first_intersection.min(second_intersection)
+        };
+
+        let hit_point = ray.origin() + &(ray.direction() * t);
+        return Some(Intersection::new(t, Some((&hit_point - self.transform.position()).normalized())));
     }
 }
