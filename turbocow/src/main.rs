@@ -9,12 +9,13 @@ pub mod ui;
 pub mod geometry;
 pub mod io;
 pub mod objects;
+pub mod protocol;
 pub mod render;
 pub mod scene;
 pub mod scenes;
 
 use std::path::Path;
-use std::{fs, env};
+use std::{fs, env, thread};
 
 use env_logger::Env;
 
@@ -35,6 +36,8 @@ use crate::render::basic_push::BasicPushRender;
 use crate::io::traits::{Model, ModelLoader};
 use crate::scenes::provider::SceneProvider;
 use crate::scenes::demo::DemoSceneProvider;
+use std::collections::HashSet;
+use crate::ui::window::WindowOutput;
 
 const DEFAULT_LOGGING_LEVEL: &str = "info";
 
@@ -44,7 +47,7 @@ fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or(DEFAULT_LOGGING_LEVEL)).init();
     print_intro();
 
-    // livestonk::bind!(dyn Render, BasicRender);
+    //livestonk::bind!(dyn Render, BasicRender);
     livestonk::bind!(dyn Render, BasicPushRender);
 
     livestonk::bind_to_instance!(dyn ImageFormatSupportPlugin, BMPFormatSupportPlugin::new());
@@ -57,21 +60,32 @@ fn main() {
 }
 
 fn run() {
-    render_scene();
-
     let args: Vec<String> = env::args().collect();
+    let flags: HashSet<String> = args.iter()
+        .filter(|arg| arg.starts_with("--"))
+        .map(|flag| &flag[2..])
+        .map(|v| v.to_string())
+        .collect();
+
     if args.len() == 1 {
-        render_scene();
+        render_scene(flags);
+        return;
     }
 
     match args[1].as_str() {
-        "render" => render_scene(),
+        "render" => render_scene(flags),
         "ui" => ui::window::run_with_args(&args[2..]),
         other => error!("Unknown mode: {}", other)
     }
 }
 
-fn render_scene() {
+fn render_scene(flags: HashSet<String>) {
+    let display_join_handle = if flags.contains("display") {
+        Some(thread::spawn(|| WindowOutput::new().update_loop()))
+    } else {
+        None
+    };
+
     let output_format_support: Box<dyn ImageFormatSupportPlugin> = Livestonk::resolve();
     let scene_provider: Box<dyn SceneProvider> = Livestonk::resolve();
     let render: Box<dyn Render> = Livestonk::resolve();
@@ -82,10 +96,15 @@ fn render_scene() {
     info!("rendering image");
     render.render(&scene, &mut output);
 
-    info!("saving rendered image");
-
-    let image_bytes = output_format_support.writer()
-        .write(&output, &ImageWriterOptions::default())
-        .expect("failed to write image");
-    fs::write("result.bmp", &image_bytes).expect("failed to save result image");
+    if let Some(handle) = display_join_handle {
+        info!("done rendering image");
+        handle.join().expect("Failed to join display thread");
+    } else {
+        info!("saving rendered image");
+        let image_bytes = output_format_support.writer()
+            .write(&output, &ImageWriterOptions::default())
+            .expect("failed to write image");
+        fs::write("result.bmp", &image_bytes)
+            .expect("failed to save result image");
+    }
 }

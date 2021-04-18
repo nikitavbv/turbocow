@@ -9,6 +9,7 @@ use crate::{geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_
 use super::render::Render;
 use crate::render::intersection::Intersection;
 use std::net::{UdpSocket, SocketAddrV4, Ipv4Addr};
+use crate::protocol::Message;
 
 #[derive(Component)]
 pub struct BasicPushRender {
@@ -37,6 +38,7 @@ impl Render for BasicPushRender {
         let field_of_view = (camera.field_of_view() / 2.0).tan();
 
         let transformed_origin = transform.apply_for_point(transform.position());
+        let mut messages_to_send: Vec<Message> = Vec::with_capacity(100);
 
         for y in 0..height {
             let normalized_y = 1.0 - 2.0 * (y as f64 + 0.5) / height as f64;
@@ -52,12 +54,20 @@ impl Render for BasicPushRender {
                     transformed_origin,
                     transform.apply_for_vector(&direction).normalized()
                 );
-                render_to.set_pixel(x, y, render_ray(&ray, &scene));
+                let pixel = render_ray(&ray, &scene);
+                render_to.set_pixel(x, y, pixel.clone());
 
-                trace!("sending");
-                let buf = [0u8; 64];
-                socket.send_to(&buf, renderer_target);
-                trace!("sent");
+                messages_to_send.push(Message::SetPixel {
+                    x: x as u16,
+                    y: y as u16,
+                    pixel,
+                });
+
+                if messages_to_send.len() >= 100 {
+                    let message = Message::Multi(messages_to_send.clone());
+                    socket.send_to(&bincode::serialize(&message).unwrap(), renderer_target);
+                    messages_to_send.clear();
+                }
             }
         }
     }

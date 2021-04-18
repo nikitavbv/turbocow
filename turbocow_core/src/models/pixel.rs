@@ -1,6 +1,7 @@
+use serde::{Serialize, Deserialize};
 use std::ops::Mul;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Pixel {
     pub red: u8,
     pub green: u8,
