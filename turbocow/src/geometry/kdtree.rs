@@ -17,6 +17,13 @@ impl BoundingBox {
         }
     }
 
+    pub const fn empty() -> Self {
+        BoundingBox {
+            first: Vector3::new(0.0, 0.0, 0.0),
+            second: Vector3::new(0.0, 0.0, 0.0),
+        }
+    }
+
     pub fn from_triangle(triangle: &Triangle) -> Self {
         let vertices = triangle.get_vertices();
         let mut min_x = vertices[0].x;
@@ -106,46 +113,78 @@ impl KDTree {
         }
     }
 
-    fn calculate_sah(bounding_box: &BoundingBox, triangles: Vec<Triangle>, split_axis: u8, v: f64) -> f64 {
-        let nodes = KDTree::split_box_by_plane(bounding_box, triangles.clone(), split_axis, v);
-        if nodes.len() == 0 {
-            return bounding_box.sqare() * triangles.len() as f64;
-        }
-        let mut sah_value = 0.0;
-        for node in nodes {
-            match node {
-                NodeType::LeafNode(bounding_box, triangles) => sah_value += bounding_box.sqare() * triangles.len() as f64,
-                NodeType::Node(_, _) => {},
+    fn calculate_sah(bounding_box: &BoundingBox, triangles: &Vec<Triangle>, split_axis: u8, v: f64) -> (f64, u8) {
+        let get_coorginate = KDTree::coordinate_fn(split_axis);
+        let mut left_triangles = 0;
+        let mut left_box = BoundingBox::empty();
+        let mut middle_triangles = 0;
+        let mut middle_box = BoundingBox::empty();
+        let mut right_triangles = 0;
+        let mut right_box = BoundingBox::empty();
+        for triangle in triangles.iter() {
+            match KDTree::determine_side(
+                get_coorginate(triangle.get_vertices()[0]),
+                get_coorginate(triangle.get_vertices()[1]),
+                get_coorginate(triangle.get_vertices()[2]),
+                v
+            ) {
+                Side::Left => {
+                    left_triangles += 1;
+                    left_box.extend(triangle);
+                },
+                Side::Middle => {
+                    middle_triangles += 1;
+                    middle_box.extend(triangle);
+                },
+                Side::Right => {
+                    right_triangles += 1;
+                    right_box.extend(triangle);
+                },
             };
         }
-        sah_value
+        // println!("triangles: {} {} {}", left_triangles, middle_triangles, right_triangles);
+        let mut sah_value = 0.0;
+        let mut nodes = 0;
+        if left_triangles > 0 {
+            sah_value += left_triangles as f64 * left_box.sqare();
+            nodes += 1;
+        }
+        if middle_triangles > 0 {
+            sah_value += middle_triangles as f64 * middle_box.sqare();
+            nodes += 1;
+        }
+        if right_triangles > 0 {
+            sah_value += right_triangles as f64 * right_box.sqare();
+            nodes += 1;
+        }
+        // println!("sah: {}", sah_value);
+        (sah_value, nodes)
     }
 
     fn split_box_sah(bounding_box: &BoundingBox, triangles: Vec<Triangle>, split_axis: u8) -> Vec<NodeType> {
-        println!("split box sah");
+        // println!("split box sah");
         let get_coorginate = KDTree::coordinate_fn(split_axis);
         let min = get_coorginate(&bounding_box.first);
         let max = get_coorginate(&bounding_box.second);
-        let step = (max - min) / 32.0;
+        let step = (max - min) / 16.0;
         let mut i = min + step;
-        let mut sah_value = KDTree::calculate_sah(bounding_box, triangles.clone(), split_axis, i);
+        let (mut sah_value, mut nodes) = KDTree::calculate_sah(bounding_box, &triangles, split_axis, i);
         let mut split_coordinate = i;
         i += step;
         while i < max {
-            let tmp_sah = KDTree::calculate_sah(bounding_box, triangles.clone(), split_axis, i);
-            if tmp_sah < sah_value {
+            let (tmp_sah, tmp_nodes) = KDTree::calculate_sah(bounding_box, &triangles, split_axis, i);
+            if (nodes == 1 && tmp_nodes > 1) || (tmp_sah < sah_value && tmp_nodes >= nodes) {
                 sah_value = tmp_sah;
                 split_coordinate = i;
+                nodes = tmp_nodes;
             }
             i += step;
         }
-        KDTree::split_box_by_plane(bounding_box, triangles, split_axis, split_coordinate)
+        KDTree::split_box_by_plane(triangles, split_axis, split_coordinate)
     }
 
-    fn split_box_by_plane(bounding_box: &BoundingBox, triangles: Vec<Triangle>, split_axis: u8, v: f64) -> Vec<NodeType> {
+    fn split_box_by_plane(triangles: Vec<Triangle>, split_axis: u8, v: f64) -> Vec<NodeType> {
         let get_coorginate = KDTree::coordinate_fn(split_axis);
-        let min = get_coorginate(&bounding_box.first);
-        let max = get_coorginate(&bounding_box.second);
         let mut left = Vec::new();
         let mut middle = Vec::new();
         let mut right = Vec::new();
@@ -161,6 +200,7 @@ impl KDTree {
                 Side::Right => right.push(triangle),
             };
         }
+        // println!("{} {} {}", left.len(), middle.len(), right.len());
         let mut nodes = Vec::new();
         if left.len() > 0 {
             nodes.push(NodeType::LeafNode(calculate_bounding_box(&left), left));
@@ -171,6 +211,7 @@ impl KDTree {
         if right.len() > 0 {
             nodes.push(NodeType::LeafNode(calculate_bounding_box(&right), right));
         }
+        // println!("split_box_by_plane: nodes.len: {}", nodes.len());
         nodes
     }
 
@@ -179,11 +220,11 @@ impl KDTree {
         let min = get_coorginate(&bounding_box.first);
         let max = get_coorginate(&bounding_box.second);
         let v = (min + max) / (2 as f64);
-        KDTree::split_box_by_plane(bounding_box, triangles, split_axis, v)
+        KDTree::split_box_by_plane(triangles, split_axis, v)
     }
 
     fn build_tree(node: NodeType, mut split_axis: u8) -> NodeType {
-        println!("build tree fn");
+        // println!("build tree fn");
         match node {
             NodeType::Node(_, _) => node,
             NodeType::LeafNode(bounding_box, triangles) => {
