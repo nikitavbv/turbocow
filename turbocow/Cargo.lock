@@ -1467,6 +1467,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "bmp_support",
+ "byteorder",
  "crossbeam",
  "custom_error",
  "env_logger",

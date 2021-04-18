@@ -8,8 +8,12 @@ use crate::{geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_
 
 use super::render::Render;
 use crate::render::intersection::Intersection;
-use std::net::{UdpSocket, SocketAddrV4, Ipv4Addr};
+use std::net::{UdpSocket, SocketAddrV4, Ipv4Addr, TcpStream};
 use crate::protocol::Message;
+use std::time::Instant;
+use std::io::Write;
+
+use byteorder::{LittleEndian, WriteBytesExt};
 
 #[derive(Component)]
 pub struct BasicPushRender {
@@ -26,8 +30,10 @@ impl BasicPushRender {
 impl Render for BasicPushRender {
 
     fn render(&self, scene: &Scene, render_to: &mut Image) {
-        let mut socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let renderer_target = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 30421);
+        let mut socket = TcpStream::connect(renderer_target).unwrap();
+        socket.set_nodelay(true);
+        socket.set_nonblocking(true);
 
         let camera = scene.camera();
 
@@ -38,7 +44,8 @@ impl Render for BasicPushRender {
         let field_of_view = (camera.field_of_view() / 2.0).tan();
 
         let transformed_origin = transform.apply_for_point(transform.position());
-        let mut messages_to_send: Vec<Message> = Vec::with_capacity(100);
+        let mut messages_to_send: Vec<Message> = Vec::new();
+        let mut last_push = Instant::now();
 
         for y in 0..height {
             let normalized_y = 1.0 - 2.0 * (y as f64 + 0.5) / height as f64;
@@ -57,16 +64,23 @@ impl Render for BasicPushRender {
                 let pixel = render_ray(&ray, &scene);
                 render_to.set_pixel(x, y, pixel.clone());
 
+                let time = Instant::now();
                 messages_to_send.push(Message::SetPixel {
                     x: x as u16,
                     y: y as u16,
                     pixel,
                 });
 
-                if messages_to_send.len() >= 100 {
+                if (time - last_push).as_millis() > 20 || (y == (height - 1) && x == (width - 1)) {
                     let message = Message::Multi(messages_to_send.clone());
-                    socket.send_to(&bincode::serialize(&message).unwrap(), renderer_target);
+                    let serialized = &bincode::serialize(&message).unwrap();
+                    let len = serialized.len() as u32;
+                    let mut len_bytes= Vec::new();
+                    len_bytes.write_u32::<LittleEndian>(len);
+                    socket.write(&len_bytes);
+                    socket.write(serialized);
                     messages_to_send.clear();
+                    last_push = time;
                 }
             }
         }

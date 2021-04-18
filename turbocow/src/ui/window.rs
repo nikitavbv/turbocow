@@ -1,11 +1,13 @@
 use std::time::Instant;
-use std::net::UdpSocket;
+use std::net::{UdpSocket, TcpListener};
 use std::thread;
 use std::thread::JoinHandle;
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use minifb::{Window, WindowOptions, Key};
 use crossbeam::channel::*;
 use crate::protocol::Message;
+use std::io::{Read, Cursor};
+use byteorder::{LittleEndian, ReadBytesExt};
 
 pub struct WindowOutput {
 
@@ -80,12 +82,8 @@ impl WindowOutput {
                 let offset = (*y as usize * 1000) + *x as usize;
 
                 self.buffer[offset] = ((pixel.red as u32) << 16)
-                | ((pixel.green as u32) << 8)
-                | (pixel.blue as u32);
-
-                //buffer[offset] = pixel.red as u32;
-                //buffer[offset + 1] = pixel.green as u32;
-                //buffer[offset + 2] = pixel.blue as u32;
+                    | ((pixel.green as u32) << 8)
+                    | (pixel.blue as u32);
             }
         }
     }
@@ -98,14 +96,30 @@ pub fn run_with_args(args: &[String]) {
 
 fn start_udp_server(tx: Sender<Message>) -> JoinHandle<()> {
     thread::spawn(move || {
-        let mut socket = UdpSocket::bind("0.0.0.0:30421").unwrap();
-        let mut udp_incoming = [0; 4096];
+        let listener = TcpListener::bind("0.0.0.0:30421").unwrap();
+        info!("window tcp server started");
 
-        info!("udp server started");
+        let mut buffer = [0; 2048];
+        let mut all_data = Vec::new();
 
-        loop {
-            let (bytes_read, from) = socket.recv_from(&mut udp_incoming).unwrap();
-            tx.send(bincode::deserialize(&udp_incoming[0..bytes_read]).unwrap()).unwrap();
+        for stream in listener.incoming() {
+            let mut stream = stream.unwrap();
+
+            loop {
+                let total_read = stream.read(&mut buffer).unwrap();
+
+                if total_read > 0 {
+                    all_data.append(&mut buffer[0..total_read].to_vec());
+
+                    let mut size_bytes = Cursor::new(all_data[0..4].to_vec());
+                    let size = size_bytes.read_u32::<LittleEndian>().unwrap();
+                    if all_data.len() >= size as usize + 4 {
+                        all_data.drain(0..4);
+                        let data: Vec<u8> = all_data.drain(0..(size as usize)).collect();
+                        tx.send(bincode::deserialize(&data).unwrap()).unwrap();
+                    }
+                }
+            }
         }
     })
 }
