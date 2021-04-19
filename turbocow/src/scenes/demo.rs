@@ -19,7 +19,7 @@ impl SceneProvider for DemoSceneProvider {
     fn scene(&self) -> Scene {
         let mut scene = Scene::new();
 
-        let model = &self.model_loader.load("assets/cow.obj")
+        let model = &self.model_loader.load("assets/dragon3.obj")
             .expect("Failed to load cow");
 
         scene.set_camera(
