@@ -1,6 +1,12 @@
 # How to use turbocow ui
 
-## Push Mode
+## Push Mode (single image)
+Render your images using the following command:
+```
+cargo run --release render --display
+```
+
+## Push Mode (server)
 1. Start ui server using:
 ```
 cargo run --release ui
