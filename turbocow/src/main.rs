@@ -32,7 +32,7 @@ use objects::{polygon_object::PolygonObject, triangle::Triangle};
 use render::{multithreaded::MultithreadedRender, render::Render};
 use scene::{camera::Camera, scene::Scene, scene_object::SceneObject};
 use crate::render::basic::BasicRender;
-use crate::render::basic_push::BasicPushRender;
+use crate::render::multithreaded_push::MultithreadedPushRender;
 use crate::io::traits::{Model, ModelLoader};
 use crate::scenes::provider::SceneProvider;
 use crate::scenes::demo::DemoSceneProvider;
@@ -48,7 +48,7 @@ fn main() {
     print_intro();
 
     //livestonk::bind!(dyn Render, MultithreadedRender);
-    livestonk::bind!(dyn Render, BasicPushRender);
+    livestonk::bind!(dyn Render, MultithreadedPushRender);
 
     livestonk::bind_to_instance!(dyn ImageFormatSupportPlugin, BMPFormatSupportPlugin::new());
     livestonk::bind!(dyn ModelLoader, ObjFileLoader);
