@@ -8,6 +8,7 @@ use crate::geometry::vector3::Vector3;
 use crate::io::traits::ModelLoader;
 use crate::objects::sphere::Sphere;
 use crate::scene::distant_light::DistantLight;
+use std::collections::HashMap;
 
 #[derive(Component)]
 pub struct DemoSceneProvider {
@@ -16,10 +17,10 @@ pub struct DemoSceneProvider {
 
 impl SceneProvider for DemoSceneProvider {
 
-    fn scene(&self) -> Scene {
+    fn scene(&self, options: &HashMap<String, String>) -> Scene {
         let mut scene = Scene::new();
-
-        let model = &self.model_loader.load("assets/dragon3.obj")
+        
+        let model = &self.model_loader.load(options.get("source").unwrap_or(&"assets/cow.obj".to_string()))
             .expect("Failed to load cow");
 
         scene.set_camera(

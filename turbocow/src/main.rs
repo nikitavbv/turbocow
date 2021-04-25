@@ -36,7 +36,7 @@ use crate::render::basic_push::BasicPushRender;
 use crate::io::traits::{Model, ModelLoader};
 use crate::scenes::provider::SceneProvider;
 use crate::scenes::demo::DemoSceneProvider;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use crate::ui::window::WindowOutput;
 
 const DEFAULT_LOGGING_LEVEL: &str = "info";
@@ -67,19 +67,29 @@ fn run() {
         .map(|v| v.to_string())
         .collect();
 
-    if args.len() == 1 {
-        render_scene(flags);
+    let options: HashMap<String, String> = flags.iter()
+        .filter(|v| v.contains("="))
+        .map(|v| (v[0..v.find("=").unwrap()].to_string(), v[v.find("=").unwrap()+1..].to_string()))
+        .collect();
+
+    let commands: Vec<String> = args.iter()
+        .filter(|v| !v.starts_with("--"))
+        .map(|v| v.clone())
+        .collect();
+
+    if commands.len() == 1 {
+        render_scene(flags, options);
         return;
     }
 
-    match args[1].as_str() {
-        "render" => render_scene(flags),
-        "ui" => ui::window::run_with_args(&args[2..]),
+    match commands[1].as_str() {
+        "render" => render_scene(flags, options),
+        "ui" => ui::window::run_with_args(&commands[2..]),
         other => error!("Unknown mode: {}", other)
     }
 }
 
-fn render_scene(flags: HashSet<String>) {
+fn render_scene(flags: HashSet<String>, options: HashMap<String, String>) {
     let display_join_handle = if flags.contains("display") {
         Some(thread::spawn(|| WindowOutput::new().update_loop()))
     } else {
@@ -90,7 +100,7 @@ fn render_scene(flags: HashSet<String>) {
     let scene_provider: Box<dyn SceneProvider> = Livestonk::resolve();
     let render: Box<dyn Render> = Livestonk::resolve();
 
-    let scene = scene_provider.scene();
+    let scene = scene_provider.scene(&options);
     let mut output = Image::new(1000, 1000);
 
     info!("rendering image");
@@ -104,7 +114,7 @@ fn render_scene(flags: HashSet<String>) {
         let image_bytes = output_format_support.writer()
             .write(&output, &ImageWriterOptions::default())
             .expect("failed to write image");
-        fs::write("result.bmp", &image_bytes)
+        fs::write(options.get("output").unwrap_or(&"result.bmp".to_string()), &image_bytes)
             .expect("failed to save result image");
     }
 }
