@@ -54,7 +54,7 @@ impl Render for BasicRender {
     }
 }
 
-fn render_ray(ray: &Ray, scene: &Scene) -> Pixel {
+pub fn render_ray(ray: &Ray, scene: &Scene) -> Pixel {
     let intersect_obj = find_intersection(&ray, &scene);
 
     if intersect_obj.is_none() {

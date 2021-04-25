@@ -47,8 +47,8 @@ fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or(DEFAULT_LOGGING_LEVEL)).init();
     print_intro();
 
-    //livestonk::bind!(dyn Render, BasicRender);
-    livestonk::bind!(dyn Render, BasicPushRender);
+    livestonk::bind!(dyn Render, MultithreadedRender);
+    //livestonk::bind!(dyn Render, BasicPushRender);
 
     livestonk::bind_to_instance!(dyn ImageFormatSupportPlugin, BMPFormatSupportPlugin::new());
     livestonk::bind!(dyn ModelLoader, ObjFileLoader);

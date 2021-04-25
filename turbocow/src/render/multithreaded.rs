@@ -2,11 +2,14 @@ use rayon::prelude::*;
 
 use turbocow_core::models::pixel::Pixel;
 use turbocow_core::models::image::Image;
+use livestonk::*;
 
 use crate::{geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_object::SceneObject}};
 
 use super::render::Render;
+use crate::render::basic::render_ray;
 
+#[derive(Component)]
 pub struct MultithreadedRender {
 }
 
@@ -51,27 +54,6 @@ fn worker(scene: &Scene, output: &mut [Pixel], chunk: usize, chunk_size: usize, 
         let direction = Vector3::new(camera_x, camera_y, -1.0).normalized();
         let ray = Ray::new(transformed_origin, transform.apply_for_vector(&direction).normalized());
 
-        let intersect_object = find_intersection(&ray, &scene);
-        output[x] = if intersect_object.is_some() {
-            Pixel::from_rgb(255, 0, 0)
-        } else {
-            Pixel::black()
-        };
+        output[x] = render_ray(&ray, &scene);
     }
-}
-
-fn find_intersection<'a>(ray: &Ray, scene: &'a Scene) -> Option<&'a Box<dyn SceneObject + Sync + Send>> {
-    let mut result = None;
-    let mut min_distance = f64::MAX;
-
-    for object in scene.objects() {
-        if let Some(intersection) = object.check_intersection(&ray) {
-            if intersection.ray_distance() < min_distance {
-                min_distance = intersection.ray_distance();
-                result = Some(object);
-            }
-        }
-    }
-
-    result
 }
