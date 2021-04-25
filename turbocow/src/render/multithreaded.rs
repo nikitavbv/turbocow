@@ -8,6 +8,7 @@ use crate::{geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_
 
 use super::render::Render;
 use crate::render::basic::render_ray;
+use crate::render::render::RenderError;
 
 #[derive(Component)]
 pub struct MultithreadedRender {
@@ -23,7 +24,7 @@ impl MultithreadedRender {
 
 impl Render for MultithreadedRender {
 
-    fn render(&self, scene: &Scene, render_to: &mut Image) {
+    fn render(&self, scene: &Scene, render_to: &mut Image) -> Result<(), RenderError> {
         let width = render_to.width;
         let height = render_to.height;
         let chunk_size = width;
@@ -31,6 +32,8 @@ impl Render for MultithreadedRender {
         render_to.pixels.par_chunks_mut(chunk_size).enumerate().for_each(|(i, output)| {
             worker(&scene, output, i, chunk_size, width, height);
         });
+
+        Ok(())
     }
 }
 

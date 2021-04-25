@@ -32,12 +32,14 @@ use objects::{polygon_object::PolygonObject, triangle::Triangle};
 use render::{multithreaded::MultithreadedRender, render::Render};
 use scene::{camera::Camera, scene::Scene, scene_object::SceneObject};
 use crate::render::basic::BasicRender;
+use crate::render::basic_push::BasicPushRender;
 use crate::render::multithreaded_push::MultithreadedPushRender;
 use crate::io::traits::{Model, ModelLoader};
 use crate::scenes::provider::SceneProvider;
 use crate::scenes::demo::DemoSceneProvider;
 use std::collections::{HashSet, HashMap};
 use crate::ui::window::WindowOutput;
+use crate::render::render::RenderError;
 
 const DEFAULT_LOGGING_LEVEL: &str = "info";
 
@@ -100,15 +102,28 @@ fn render_scene(flags: HashSet<String>, options: HashMap<String, String>) {
     let scene_provider: Box<dyn SceneProvider> = Livestonk::resolve();
     let render: Box<dyn Render> = Livestonk::resolve();
 
+    let mut used_remote_write = render.is_remote_write();
+
     let scene = scene_provider.scene(&options);
     let mut output = Image::new(1000, 1000);
 
     info!("rendering image");
-    render.render(&scene, &mut output);
+    if let Err(err) = render.render(&scene, &mut output) {
+        match err {
+            RenderError::SocketError { source: _ } => {
+                warn!("Failed to connect via cow socket. Falling back to simple multithreaded renderer...");
+                let render: Box<MultithreadedRender> = Livestonk::resolve();
+                used_remote_write = render.is_remote_write();
+                render.render(&scene, &mut output);
+            }
+        }
+    }
 
     if let Some(handle) = display_join_handle {
         info!("done rendering image");
         handle.join().expect("Failed to join display thread");
+    } else if used_remote_write {
+        info!("done rendering image. saved using remote write");
     } else {
         info!("saving rendered image");
         let image_bytes = output_format_support.writer()

@@ -12,6 +12,7 @@ use super::render::Render;
 use crate::render::basic::render_ray;
 use crate::protocol::socket::CowSocket;
 use crate::protocol::message::Message;
+use crate::render::render::RenderError;
 
 #[derive(Component)]
 pub struct MultithreadedPushRender {
@@ -27,16 +28,22 @@ impl MultithreadedPushRender {
 
 impl Render for MultithreadedPushRender {
 
-    fn render(&self, scene: &Scene, render_to: &mut Image) {
+    fn render(&self, scene: &Scene, render_to: &mut Image) -> Result<(), RenderError> {
         let width = render_to.width;
         let height = render_to.height;
         let chunk_size = width;
 
-        let socket = CowSocket::start_client(Ipv4Addr::LOCALHOST);
+        let socket = CowSocket::start_client(Ipv4Addr::LOCALHOST)?;
 
         render_to.pixels.par_chunks_mut(chunk_size).enumerate().for_each(|(i, output)| {
             worker(&scene, output, &socket, i, chunk_size, width, height);
         });
+
+        Ok(())
+    }
+
+    fn is_remote_write(&self) -> bool {
+        true
     }
 }
 
@@ -60,12 +67,12 @@ fn worker(scene: &Scene, output: &mut [Pixel], socket: &CowSocket, chunk: usize,
         let direction = Vector3::new(camera_x, camera_y, -1.0).normalized();
         let ray = Ray::new(transformed_origin, transform.apply_for_vector(&direction).normalized());
 
-        output[x] = render_ray(&ray, &scene);
+        let pixel = render_ray(&ray, &scene);
 
         socket.send(Message::SetPixel {
             x: x as u16,
             y: y as u16,
-            pixel: output[x],
+            pixel,
         }, true);
     }
 }

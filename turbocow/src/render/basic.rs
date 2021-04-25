@@ -8,6 +8,7 @@ use crate::{geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_
 
 use super::render::Render;
 use crate::render::intersection::Intersection;
+use crate::render::render::RenderError;
 
 #[derive(Component)]
 pub struct BasicRender {
@@ -23,7 +24,7 @@ impl BasicRender {
 
 impl Render for BasicRender {
 
-    fn render(&self, scene: &Scene, render_to: &mut Image) {
+    fn render(&self, scene: &Scene, render_to: &mut Image) -> Result<(), RenderError> {
         let camera = scene.camera();
 
         let transform = camera.transform();
@@ -51,6 +52,8 @@ impl Render for BasicRender {
                 render_to.set_pixel(x, y, render_ray(&ray, &scene));
             }
         }
+
+        Ok(())
     }
 }
 
