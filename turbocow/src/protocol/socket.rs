@@ -97,7 +97,6 @@ fn start_udp_server(tx: Sender<Message>) -> JoinHandle<()> {
         loop {
             let total_read = socket.recv(&mut buffer).unwrap();
             if total_read > 0 {
-                info!("read some udp");
                 tx.send(bincode::deserialize(&buffer[0..total_read]).unwrap()).unwrap();
             }
         }
@@ -113,6 +112,7 @@ fn start_tcp_server(tx: Sender<Message>) -> JoinHandle<()> {
         let mut all_data = Vec::new();
 
         for stream in socket.incoming() {
+            info!("new tcp connection established");
             let mut stream = stream.unwrap();
 
             loop {
@@ -129,7 +129,8 @@ fn start_tcp_server(tx: Sender<Message>) -> JoinHandle<()> {
                         }
                     }
                 } else {
-                    thread::sleep(Duration::from_millis(5));
+                    info!("tcp connection closed");
+                    break;
                 }
             }
         }
