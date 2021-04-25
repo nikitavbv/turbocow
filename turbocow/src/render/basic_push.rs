@@ -16,6 +16,7 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use std::convert::TryInto;
 use crate::protocol::message::Message;
 use crate::protocol::socket::CowSocket;
+use crate::render::render::RenderError;
 
 #[derive(Component)]
 pub struct BasicPushRender {
@@ -31,8 +32,8 @@ impl BasicPushRender {
 
 impl Render for BasicPushRender {
 
-    fn render(&self, scene: &Scene, render_to: &mut Image) {
-        let socket = CowSocket::start_client(Ipv4Addr::LOCALHOST);
+    fn render(&self, scene: &Scene, render_to: &mut Image) -> Result<(), RenderError> {
+        let socket = CowSocket::start_client(Ipv4Addr::LOCALHOST)?;
 
         let camera = scene.camera();
 
@@ -59,7 +60,6 @@ impl Render for BasicPushRender {
                     transform.apply_for_vector(&direction).normalized()
                 );
                 let pixel = render_ray(&ray, &scene);
-                render_to.set_pixel(x, y, pixel.clone());
 
                 socket.send(Message::SetPixel {
                     x: x as u16,
@@ -68,6 +68,12 @@ impl Render for BasicPushRender {
                 }, true);
             }
         }
+
+        Ok(())
+    }
+
+    fn is_remote_write(&self) -> bool {
+        true
     }
 }
 

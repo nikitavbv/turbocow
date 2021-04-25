@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 use rayon::prelude::*;
 
 use turbocow_core::models::pixel::Pixel;
@@ -8,13 +10,15 @@ use crate::{geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_
 
 use super::render::Render;
 use crate::render::basic::render_ray;
+use crate::protocol::socket::CowSocket;
+use crate::protocol::message::Message;
 use crate::render::render::RenderError;
 
 #[derive(Component)]
-pub struct MultithreadedRender {
+pub struct MultithreadedPushRender {
 }
 
-impl MultithreadedRender {
+impl MultithreadedPushRender {
 
     pub fn new() -> Self {
         Self {
@@ -22,22 +26,28 @@ impl MultithreadedRender {
     }
 }
 
-impl Render for MultithreadedRender {
+impl Render for MultithreadedPushRender {
 
     fn render(&self, scene: &Scene, render_to: &mut Image) -> Result<(), RenderError> {
         let width = render_to.width;
         let height = render_to.height;
         let chunk_size = width;
 
+        let socket = CowSocket::start_client(Ipv4Addr::LOCALHOST)?;
+
         render_to.pixels.par_chunks_mut(chunk_size).enumerate().for_each(|(i, output)| {
-            worker(&scene, output, i, chunk_size, width, height);
+            worker(&scene, output, &socket, i, chunk_size, width, height);
         });
 
         Ok(())
     }
+
+    fn is_remote_write(&self) -> bool {
+        true
+    }
 }
 
-fn worker(scene: &Scene, output: &mut [Pixel], chunk: usize, chunk_size: usize, width: usize, height: usize) {
+fn worker(scene: &Scene, output: &mut [Pixel], socket: &CowSocket, chunk: usize, chunk_size: usize, width: usize, height: usize) {
     let camera = scene.camera();
 
     let transform = camera.transform();
@@ -57,6 +67,12 @@ fn worker(scene: &Scene, output: &mut [Pixel], chunk: usize, chunk_size: usize, 
         let direction = Vector3::new(camera_x, camera_y, -1.0).normalized();
         let ray = Ray::new(transformed_origin, transform.apply_for_vector(&direction).normalized());
 
-        output[x] = render_ray(&ray, &scene);
+        let pixel = render_ray(&ray, &scene);
+
+        socket.send(Message::SetPixel {
+            x: x as u16,
+            y: y as u16,
+            pixel,
+        }, true);
     }
 }

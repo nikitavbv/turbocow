@@ -1,12 +1,19 @@
 use std::net::{UdpSocket, SocketAddrV4, Ipv4Addr, TcpStream, TcpListener};
 use std::thread::JoinHandle;
 use std::thread;
+
 use crossbeam::channel::*;
+use custom_error::custom_error;
+
 use crate::protocol::message::Message;
 use std::time::Instant;
 use std::convert::TryInto;
 use std::io::{Write, Read, Cursor};
 use byteorder::{WriteBytesExt, LittleEndian, ReadBytesExt};
+
+custom_error! {pub CowSocketError
+    FailedToConnect {description: String} = "Failed to connect: {description}",
+}
 
 pub struct CowSocket {
 
@@ -35,18 +42,18 @@ impl CowSocket {
         }
     }
 
-    pub fn start_client(target: Ipv4Addr) -> Self {
+    pub fn start_client(target: Ipv4Addr) -> Result<Self, CowSocketError> {
         let (udp_tx, udp_rx) = crossbeam::channel::unbounded();
         let (tcp_tx, tcp_rx) = crossbeam::channel::unbounded();
 
-        CowSocket {
+        Ok(CowSocket {
             udp_thread: start_udp_client(target, udp_rx),
-            tcp_thread: start_tcp_client(target, tcp_rx),
+            tcp_thread: start_tcp_client(target, tcp_rx)?,
             message_sender_udp: Some(udp_tx),
             message_sender_tcp: Some(tcp_tx),
             message_receiver_udp: None,
             message_receiver_tcp: None,
-        }
+        })
     }
 
     pub fn recv(&self) -> Option<Message> {
@@ -163,13 +170,15 @@ fn start_udp_client(target: Ipv4Addr, rx: Receiver<Message>) -> JoinHandle<()> {
     })
 }
 
-fn start_tcp_client(target: Ipv4Addr, rx: Receiver<Message>) -> JoinHandle<()> {
-    thread::spawn(move || {
-        let target = SocketAddrV4::new(target, 30422);
-        let mut socket = TcpStream::connect(target).unwrap();
-        socket.set_nonblocking(true);
-        socket.set_nodelay(true);
+fn start_tcp_client(target: Ipv4Addr, rx: Receiver<Message>) -> Result<JoinHandle<()>, CowSocketError> {
+    let target = SocketAddrV4::new(target, 30422);
+    let mut socket = TcpStream::connect(target).map_err(|err| CowSocketError::FailedToConnect {
+        description: format!("Failed to connect to server: {:?}", err)
+    })?;
+    socket.set_nonblocking(true);
+    socket.set_nodelay(true);
 
+    Ok(thread::spawn(move || {
         let mut messages_to_send: Vec<Message> = Vec::with_capacity(32);
         let mut total_messages = 0;
         let mut last_push = Instant::now();
@@ -198,5 +207,5 @@ fn start_tcp_client(target: Ipv4Addr, rx: Receiver<Message>) -> JoinHandle<()> {
                 last_push = time;
             }
         }
-    })
+    }))
 }
