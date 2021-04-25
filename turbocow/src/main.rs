@@ -87,6 +87,7 @@ fn run() {
     match commands[1].as_str() {
         "render" => render_scene(flags, options),
         "ui" => ui::window::run_with_args(&commands[2..]),
+        "connectivity_test" => protocol::connectivity_test::run_with_args(&commands[2..]),
         other => error!("Unknown mode: {}", other)
     }
 }
@@ -114,7 +115,7 @@ fn render_scene(flags: HashSet<String>, options: HashMap<String, String>) {
                 warn!("Failed to connect via cow socket. Falling back to simple multithreaded renderer...");
                 let render: Box<MultithreadedRender> = Livestonk::resolve();
                 used_remote_write = render.is_remote_write();
-                render.render(&scene, &mut output);
+                render.render(&scene, &mut output).unwrap();
             }
         }
     }
