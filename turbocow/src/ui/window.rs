@@ -82,7 +82,10 @@ impl WindowOutput {
                 self.buffer[offset] = ((pixel.red as u32) << 16)
                     | ((pixel.green as u32) << 8)
                     | (pixel.blue as u32);
-            }
+            },
+            Message::Ping | Message::Pong | Message::Flush | Message::Close => {
+                // ignore
+            },
         }
     }
 }

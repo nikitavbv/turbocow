@@ -87,6 +87,7 @@ fn run() {
     match commands[1].as_str() {
         "render" => render_scene(flags, options),
         "ui" => ui::window::run_with_args(&commands[2..]),
+        "connectivity_test" => protocol::connectivity_test::run_with_args(&commands[2..]),
         other => error!("Unknown mode: {}", other)
     }
 }

@@ -6,7 +6,7 @@ use crossbeam::channel::*;
 use custom_error::custom_error;
 
 use crate::protocol::message::Message;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 use std::convert::TryInto;
 use std::io::{Write, Read, Cursor};
 use byteorder::{WriteBytesExt, LittleEndian, ReadBytesExt};
@@ -73,6 +73,18 @@ impl CowSocket {
             &self.message_sender_udp
         }.as_ref().unwrap().send(message).unwrap()
     }
+
+    pub fn flush(&self) {
+        &self.send(Message::Flush, false);
+        &self.send(Message::Flush, true);
+    }
+
+    pub fn close(self) {
+        &self.send(Message::Close, false);
+        &self.send(Message::Close, true);
+        self.udp_thread.join();
+        self.tcp_thread.join();
+    }
 }
 
 fn start_udp_server(tx: Sender<Message>) -> JoinHandle<()> {
@@ -85,6 +97,7 @@ fn start_udp_server(tx: Sender<Message>) -> JoinHandle<()> {
         loop {
             let total_read = socket.recv(&mut buffer).unwrap();
             if total_read > 0 {
+                info!("read some udp");
                 tx.send(bincode::deserialize(&buffer[0..total_read]).unwrap()).unwrap();
             }
         }
@@ -106,15 +119,17 @@ fn start_tcp_server(tx: Sender<Message>) -> JoinHandle<()> {
                 let total_read = stream.read(&mut buffer).unwrap();
                 if total_read > 0 {
                     all_data.append(&mut buffer[0..total_read].to_vec());
-                }
 
-                if all_data.len() > 0 {
-                    let mut len_bytes = Cursor::new(all_data[0..4].to_vec());
-                    let part_len = len_bytes.read_u32::<LittleEndian>().unwrap() as usize;
-                    if all_data.len() >= part_len + 4 {
-                        all_data.drain(0..4);
-                        tx.send(bincode::deserialize(&all_data.drain(0..part_len).collect::<Vec<u8>>()).unwrap()).unwrap();
+                    if all_data.len() > 0 {
+                        let mut len_bytes = Cursor::new(all_data[0..4].to_vec());
+                        let part_len = len_bytes.read_u32::<LittleEndian>().unwrap() as usize;
+                        if all_data.len() >= part_len + 4 {
+                            all_data.drain(0..4);
+                            tx.send(bincode::deserialize(&all_data.drain(0..part_len).collect::<Vec<u8>>()).unwrap()).unwrap();
+                        }
                     }
+                } else {
+                    thread::sleep(Duration::from_millis(5));
                 }
             }
         }
@@ -132,10 +147,20 @@ fn start_udp_client(target: Ipv4Addr, rx: Receiver<Message>) -> JoinHandle<()> {
         let mut total_messages = 0;
         let mut last_push = Instant::now();
         let mut flush = false;
+        let mut close = false;
 
         loop {
             if let Ok(v) = rx.recv() {
-                messages_to_send.push(v);
+                match v {
+                    Message::Flush => {
+                        flush = true;
+                    },
+                    Message::Close => {
+                        flush = true;
+                        close = true;
+                    },
+                    other => messages_to_send.push(other)
+                };
             } else if messages_to_send.len() == 0 {
                 break;
             } else {
@@ -158,6 +183,10 @@ fn start_udp_client(target: Ipv4Addr, rx: Receiver<Message>) -> JoinHandle<()> {
                 messages_to_send.clear();
                 total_messages = 0;
                 last_push = time;
+            }
+
+            if close {
+                break;
             }
 
             if messages_to_send.len() == 32 {
@@ -183,10 +212,20 @@ fn start_tcp_client(target: Ipv4Addr, rx: Receiver<Message>) -> Result<JoinHandl
         let mut total_messages = 0;
         let mut last_push = Instant::now();
         let mut flush = false;
+        let mut close = false;
 
         loop {
             if let Ok(v) = rx.recv() {
-                messages_to_send.push(v);
+                match v {
+                    Message::Flush => {
+                        flush = true;
+                    },
+                    Message::Close => {
+                        flush = true;
+                        close = true;
+                    },
+                    other => messages_to_send.push(other)
+                };
             } else if messages_to_send.len() == 0 {
                 break;
             } else {
@@ -196,7 +235,11 @@ fn start_tcp_client(target: Ipv4Addr, rx: Receiver<Message>) -> Result<JoinHandl
             total_messages += 1;
 
             if (time - last_push).as_millis() > 20 || total_messages >= 100000 || flush {
-                let message = Message::BatchLarge(messages_to_send.clone());
+                let message = if messages_to_send.len() == 1 {
+                    messages_to_send.remove(0)
+                } else {
+                    Message::BatchLarge(messages_to_send.clone())
+                };
                 let serialized = &bincode::serialize(&message).unwrap();
                 let mut len_bytes = Vec::with_capacity(4);
                 len_bytes.write_u32::<LittleEndian>(serialized.len() as u32);
@@ -205,6 +248,10 @@ fn start_tcp_client(target: Ipv4Addr, rx: Receiver<Message>) -> Result<JoinHandl
                 messages_to_send.clear();
                 total_messages = 0;
                 last_push = time;
+            }
+
+            if close {
+                break;
             }
         }
     }))
