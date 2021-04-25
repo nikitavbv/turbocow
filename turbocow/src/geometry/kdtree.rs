@@ -83,7 +83,8 @@ pub enum NodeType {
 }
 
 pub struct KDTree {
-    node: NodeType
+    node: NodeType,
+    use_sah: bool,
 }
 
 enum Side {
@@ -247,7 +248,8 @@ impl KDTree {
 
     pub fn build(bounding_box: BoundingBox, triangles: Vec<Triangle>) -> Self {
         KDTree {
-            node: KDTree::build_tree(NodeType::LeafNode(bounding_box, triangles), 0)
+            node: KDTree::build_tree(NodeType::LeafNode(bounding_box, triangles), 0),
+            use_sah: true,
         }
     }
 

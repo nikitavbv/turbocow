@@ -21,8 +21,10 @@ pub fn run_with_args(args: &[String]) {
 fn run_server() {
     let server = CowSocket::start_server();
     loop {
-        if let Some(message) = server.recv() {
+        if let Some((message, metadata)) = server.recv() {
             info!("Received message: {:?}", message);
+            server.send(Message::Pong, metadata.guaranteed_delivery);
+            server.flush();
         }
 
         thread::sleep(Duration::from_millis(100));
@@ -31,7 +33,15 @@ fn run_server() {
 
 fn run_client(args: &[String]) {
     let client = CowSocket::start_client(Ipv4Addr::new(127, 0, 0, 1)).unwrap();
-    client.send(Message::Ping, true);
     client.send(Message::Ping, false);
-    client.close();
+    client.send(Message::Ping, true);
+    client.flush();
+
+    info!("pings sent... Waiting for response...");
+
+    loop {
+        if let Some((message, metadata)) = client.recv() {
+            info!("received response: {:?}", message);
+        }
+    }
 }

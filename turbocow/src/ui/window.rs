@@ -60,7 +60,7 @@ impl WindowOutput {
             }
 
             loop {
-                if let Some(message) = self.cow_socket_server.recv() {
+                if let Some((message, _)) = self.cow_socket_server.recv() {
                     self.process_message(&message);
                 } else {
                     break;

@@ -115,7 +115,7 @@ fn render_scene(flags: HashSet<String>, options: HashMap<String, String>) {
                 warn!("Failed to connect via cow socket. Falling back to simple multithreaded renderer...");
                 let render: Box<MultithreadedRender> = Livestonk::resolve();
                 used_remote_write = render.is_remote_write();
-                render.render(&scene, &mut output);
+                render.render(&scene, &mut output).unwrap();
             }
         }
     }
