@@ -3,7 +3,7 @@ FROM ubuntu:focal
 ENV TZ=Europe/Kiev
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN apt-get update && apt-get install -y git make curl gcc pkg-config libssl-dev mingw-w64 build-essential
+RUN apt-get update && apt-get install -y git make curl gcc pkg-config libssl-dev mingw-w64 build-essential libxkbcommon-x11-dev
 RUN curl https://sh.rustup.rs -sSf > rustup.sh && chmod +x rustup.sh && bash rustup.sh -y
 ENV PATH="$PATH:/root/.cargo/bin"
 
