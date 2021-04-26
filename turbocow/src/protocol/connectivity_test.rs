@@ -23,7 +23,7 @@ fn run_server() {
     loop {
         if let Some((message, metadata)) = server.recv() {
             info!("Received message: {:?}", message);
-            server.send(Message::Pong, metadata.guaranteed_delivery);
+            server.send_with_metadata(Message::Pong, metadata);
             server.flush();
         }
 
@@ -32,7 +32,12 @@ fn run_server() {
 }
 
 fn run_client(args: &[String]) {
-    let client = CowSocket::start_client(Ipv4Addr::new(127, 0, 0, 1)).unwrap();
+    if args.len() == 0 {
+        error!("Please specify target ip");
+        return;
+    }
+
+    let client = CowSocket::start_client(args[0].parse().unwrap()).unwrap();
     client.send(Message::Ping, false);
     client.send(Message::Ping, true);
     client.flush();
@@ -41,7 +46,7 @@ fn run_client(args: &[String]) {
 
     loop {
         if let Some((message, metadata)) = client.recv() {
-            info!("received response: {:?}", message);
+            info!("received response: {:?} {:?}", message, metadata);
         }
     }
 }
