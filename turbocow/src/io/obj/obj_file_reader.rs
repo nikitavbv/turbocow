@@ -46,6 +46,11 @@ pub(crate) struct ObjFileLoader {
 
 impl ObjFileLoader {
 
+    fn new() -> Self {
+        Self {
+        }
+    }
+
     fn load(obj_file: &mut ObjFile, filename: &str) -> Result<(), ObjFileError> {
         let vertex_normal = "vn";
         let vertex = "v";
@@ -221,36 +226,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test1() {
-        let mut model = ObjFile::new();
-        model.load("./assets/simple.obj").unwrap();
-        assert_eq!(model.vertices.len(), 6);
-        assert_eq!(model.vertices_normals.len(), 0);
-        assert_eq!(model.polygons.len(), 4);
-        println!("{:?}", model.polygons);
+    fn test_ok() {
+        let mut model = ObjFileLoader::new().load("./assets/simple.obj").unwrap();
+        //assert_eq!(model.vertices().len(), 6);
+        //assert_eq!(model.vertices_normals().len(), 0);
+        assert_eq!(model.polygons().len(), 4);
+        println!("{:?}", model.polygons());
     }
 
     #[test]
-    fn test2() {
-        let mut model = ObjFile::new();
-        let res = model.load("./assets/broken.obj");
+    fn test_err() {
+        let res = ObjFileLoader::new().load("./assets/broken.obj");
         match res {
             Ok(_) => panic!("Test should fail due to bad input file!"),
             Err(err) => {
-                assert_eq!(format!("{:?}", err), "VertexNormalError { description: \"Unable to parse first coordinate: v 2.292fw449 -0.871852 -0.882400. Cause: ParseFloatError { kind: Invalid }\" }");
+                assert_eq!(format!("{:?}", err), "FailedToLoad { description: \"obj file error: Failed to parse vertex normal: Unable to parse first coordinate: v 2.292fw449 -0.871852 -0.882400. Cause: ParseFloatError { kind: Invalid }\" }");
             },
         };
     }
 
     #[test]
     fn test_split() {
-        assert_eq!(vec!["-4.43".to_owned(), "0.43".to_owned(), "3".to_owned()], ObjFile::split_line(" -4.43 0.43 3  "));
+        assert_eq!(vec!["-4.43".to_owned(), "0.43".to_owned(), "3".to_owned()], ObjFileLoader::split_line(" -4.43 0.43 3  "));
     }
 
     #[test]
     fn test_cow() {
-        let mut model = ObjFile::new();
-        // model.load("./assets/cow.obj").unwrap();
-        model.load("./assets/dragon3.obj").unwrap();
+        let model = ObjFileLoader::new().load("./assets/dragon3.obj").unwrap();
     }
 }
