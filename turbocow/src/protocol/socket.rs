@@ -73,6 +73,14 @@ impl CowSocket {
         }
     }
 
+    pub fn recv_blocking(&self) -> Option<(Message, MessageMetadata)> {
+        if let Some(msg) = self.message_receiver.as_ref().unwrap().recv().ok() {
+            Some(msg)
+        } else {
+            None
+        }
+    }
+
     pub fn send_with_metadata(&self, message: Message, metadata: MessageMetadata) {
         if metadata.guaranteed_delivery {
             &self.message_sender_tcp

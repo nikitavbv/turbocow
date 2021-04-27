@@ -8,6 +8,7 @@ pub enum Message {
     Pong,
     Flush,
     Close,
+    StartStreaming,
     Batch (Box<[Message; 32]>),
     BatchLarge (Vec<Message>),
     SetPixel { x: u16, y: u16, pixel: Pixel },

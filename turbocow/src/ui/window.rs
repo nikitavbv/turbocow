@@ -1,5 +1,5 @@
 use std::time::Instant;
-use std::net::{UdpSocket, TcpListener};
+use std::net::{UdpSocket, TcpListener, Ipv4Addr};
 use std::thread;
 use std::thread::JoinHandle;
 use std::sync::{Arc, Mutex, RwLock, mpsc};
@@ -14,12 +14,16 @@ pub struct WindowOutput {
 
     window: Window,
     buffer: Vec<u32>,
-    cow_socket_server: CowSocket,
+    cow_socket: CowSocket,
 }
 
 impl WindowOutput {
 
-    pub fn new() -> Self {
+    pub fn new_server() -> Self {
+        Self::new(CowSocket::start_server())
+    }
+
+    pub fn new(socket: CowSocket) -> Self {
         let mut window = Window::new(
             "turbocow",
             1000,
@@ -40,7 +44,7 @@ impl WindowOutput {
         WindowOutput {
             window,
             buffer,
-            cow_socket_server: CowSocket::start_server(),
+            cow_socket: socket,
         }
     }
 
@@ -60,7 +64,7 @@ impl WindowOutput {
             }
 
             loop {
-                if let Some((message, _)) = self.cow_socket_server.recv() {
+                if let Some((message, _)) = self.cow_socket.recv() {
                     self.process_message(&message);
                 } else {
                     break;
@@ -83,7 +87,7 @@ impl WindowOutput {
                     | ((pixel.green as u32) << 8)
                     | (pixel.blue as u32);
             },
-            Message::Ping | Message::Pong | Message::Flush | Message::Close => {
+            Message::Ping | Message::Pong | Message::Flush | Message::Close | Message::StartStreaming => {
                 // ignore
             },
         }
@@ -92,5 +96,21 @@ impl WindowOutput {
 
 pub fn run_with_args(args: &[String]) {
     info!("running ui");
-    WindowOutput::new().update_loop();
+
+    let socket = if args.len() > 0 && args[0] == "client" {
+        let socket = CowSocket::start_client(if args.len() > 1 {
+            args[1].parse().unwrap()
+        } else {
+            Ipv4Addr::LOCALHOST
+        }).unwrap();
+
+        socket.send(Message::StartStreaming, false);
+        socket.flush();
+
+        socket
+    } else {
+        CowSocket::start_server()
+    };
+
+    WindowOutput::new(socket).update_loop();
 }

@@ -17,3 +17,14 @@ It starts a window an server to receive images. Keep it running.
 ```
 cargo run --release render
 ```
+
+## Streaming
+1. Start server with:
+```
+cargo run --release streaming_render
+```
+
+2. Start client with:
+```
+cargo run --release ui client
+```

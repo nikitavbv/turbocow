@@ -40,6 +40,7 @@ use crate::scenes::demo::DemoSceneProvider;
 use std::collections::{HashSet, HashMap};
 use crate::ui::window::WindowOutput;
 use crate::render::render::RenderError;
+use crate::render::streaming::run_streaming_render;
 
 const DEFAULT_LOGGING_LEVEL: &str = "info";
 
@@ -88,13 +89,14 @@ fn run() {
         "render" => render_scene(flags, options),
         "ui" => ui::window::run_with_args(&commands[2..]),
         "connectivity_test" => protocol::connectivity_test::run_with_args(&commands[2..]),
+        "streaming_render" => run_streaming_render(),
         other => error!("Unknown mode: {}", other)
     }
 }
 
 fn render_scene(flags: HashSet<String>, options: HashMap<String, String>) {
     let display_join_handle = if flags.contains("display") {
-        Some(thread::spawn(|| WindowOutput::new().update_loop()))
+        Some(thread::spawn(|| WindowOutput::new_server().update_loop()))
     } else {
         None
     };
