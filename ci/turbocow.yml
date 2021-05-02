@@ -19,7 +19,7 @@ turbocow build:
     - .cargo_build_executable
     - .turbocow
 
-converter build windows:
+turbocow build windows:
   extends:
     - .cargo_build_executable_windows
     - .turbocow
