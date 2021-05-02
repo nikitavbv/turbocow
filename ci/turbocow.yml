@@ -19,8 +19,25 @@ turbocow build:
     - .cargo_build_executable
     - .turbocow
 
+converter build windows:
+  extends:
+    - .cargo_build_executable_windows
+    - .turbocow
+
 turbocow image:
   extends: 
     - .service_build
     - .turbocow
   needs: ['turbocow test', 'turbocow build']
+
+turbocow deploy:
+  extends: 
+    - .executable_deploy
+    - .turbocow
+  needs: ['turbocow test', 'turbocow build']
+
+turbocow deploy windows:
+  extends:
+    - .executable_deploy_windows
+    - .turbocow
+  needs: ['turbocow test', 'turbocow build windows']
