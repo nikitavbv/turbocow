@@ -22,11 +22,13 @@ impl SceneProvider for DemoSceneProvider {
         let mut scene = Scene::new();
 
         let model = &self.model_loader.load(options.get("source").unwrap_or(&"assets/dragon3.obj".to_string()))
+        // let model = &self.model_loader.load(options.get("source").unwrap_or(&"assets/cow.obj".to_string()))
             .expect("Failed to load model");
 
         scene.set_camera(
             Camera::default()
                 .with_transform(Transform::new(Vector3::new(0.0, 0.5, 1.0), Vector3::zero()))
+                // .with_transform(Transform::new(Vector3::new(0.9, -0.6, 1.1), Vector3::new(-90.0, 220.0, 0.0)))
         );
 
         //scene.add_object(box Sphere::new(Transform::new(Vector3::new(0.0, 0.0, -3.0), Vector3::zero()), 1.0));

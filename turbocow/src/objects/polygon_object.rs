@@ -26,13 +26,17 @@ impl PolygonObject {
         for polygon in polygons {
             let ver = polygon.get_vertices();
             let pillar = ver[0].geometry();
+            let pillar_normal = ver[0].normal();
 
             for i in 1..ver.len() - 1 {
-                triangles.push(Triangle::new(
+                triangles.push(Triangle::new_with_normals(
                     transform.clone(),
                     pillar.clone(), 
                     ver[i].geometry().clone(),
-                    ver[i + 1].geometry().clone()
+                    ver[i + 1].geometry().clone(),
+                    pillar_normal.clone(),
+                    ver[i].normal().clone(),
+                    ver[i + 1].normal().clone()
                 ));
             }
         }
