@@ -21,12 +21,15 @@ impl SceneProvider for DemoSceneProvider {
     fn scene(&self, options: &HashMap<String, String>) -> Scene {
         let mut scene = Scene::new();
 
-        let model = &self.model_loader.load(options.get("source").unwrap_or(&"assets/dragon3.obj".to_string()))
+        // let model = &self.model_loader.load(options.get("source").unwrap_or(&"assets/1.obj".to_string()))
+        // let model = &self.model_loader.load(options.get("source").unwrap_or(&"assets/dragon3.obj".to_string()))
+        let model = &self.model_loader.load(options.get("source").unwrap_or(&"assets/cow.obj".to_string()))
             .expect("Failed to load model");
 
         scene.set_camera(
             Camera::default()
-                .with_transform(Transform::new(Vector3::new(0.0, 0.5, 1.0), Vector3::zero()))
+                // .with_transform(Transform::new(Vector3::new(0.0, 0.2, 1.5), Vector3::zero()))
+                .with_transform(Transform::new(Vector3::new(0.0, 0.9, 1.0), Vector3::new(90.0, 0.0, 90.0)))
         );
 
         //scene.add_object(box Sphere::new(Transform::new(Vector3::new(0.0, 0.0, -3.0), Vector3::zero()), 1.0));

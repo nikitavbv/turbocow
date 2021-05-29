@@ -15,6 +15,10 @@ impl Vertex {
     pub fn geometry(&self) -> &Vector3 {
         &self.geometry
     }
+
+    pub fn normal(&self) -> &Vector3 {
+        &self.normal
+    }
 }
 
 #[derive(Debug, Clone)]

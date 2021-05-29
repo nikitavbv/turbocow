@@ -15,6 +15,11 @@ pub struct Triangle {
 
     v0v1: Vector3,
     v0v2: Vector3,
+
+    // normals
+    vn0: Vector3,
+    vn1: Vector3,
+    vn2: Vector3,
 }
 
 impl Triangle {
@@ -38,6 +43,36 @@ impl Triangle {
 
             v0v1,
             v0v2,
+
+            vn0: Vector3::zero(),
+            vn1: Vector3::zero(),
+            vn2: Vector3::zero(),
+        }
+    }
+
+    pub fn new_with_normals(transform: Transform, v0: Vector3, v1: Vector3, v2: Vector3, vn0: Vector3, vn1: Vector3, vn2: Vector3) -> Self {
+        let v0_applied = transform.apply_for_point(&v0);
+        let v1_applied = transform.apply_for_point(&v1);
+        let v2_applied = transform.apply_for_point(&v2);
+
+        let v0v1 = v1_applied - v0_applied;
+        let v0v2 = v2_applied - v0_applied;
+
+        Self {
+            transform,
+
+            v0,
+            v1,
+            v2,
+
+            v0_applied,
+
+            v0v1,
+            v0v2,
+
+            vn0,
+            vn1,
+            vn2,
         }
     }
 
@@ -86,6 +121,12 @@ impl SceneObject for Triangle {
             return None;
         }
 
-        return Some(Intersection::new(ray_distance, Some(self.v0v1.cross_product(&self.v0v2).normalized())))
+        let w = 1.0 - u - v;
+        let na = self.vn0.clone() * w;
+        let nb = self.vn1.clone() * u;
+        let nc = self.vn2.clone() * v;
+
+        // return Some(Intersection::new(ray_distance, Some(self.v0v1.cross_product(&self.v0v2).normalized())))
+        Some(Intersection::new(ray_distance, Some((na + nb + nc).normalized())))
     }
 }
