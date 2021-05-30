@@ -36,7 +36,7 @@ use crate::render::basic_push::BasicPushRender;
 use crate::render::multithreaded_push::MultithreadedPushRender;
 use crate::io::traits::{Model, ModelLoader};
 use crate::scenes::provider::SceneProvider;
-use crate::scenes::demo::DemoSceneProvider;
+use crate::scenes::sceneformat::SceneFormatLoader;
 use std::collections::{HashSet, HashMap};
 use crate::ui::window::WindowOutput;
 use crate::render::render::RenderError;
@@ -55,7 +55,7 @@ fn main() {
 
     livestonk::bind_to_instance!(dyn ImageFormatSupportPlugin, BMPFormatSupportPlugin::new());
     livestonk::bind!(dyn ModelLoader, ObjFileLoader);
-    livestonk::bind!(dyn SceneProvider, DemoSceneProvider);
+    livestonk::bind!(dyn SceneProvider, SceneFormatLoader);
 
     run();
 

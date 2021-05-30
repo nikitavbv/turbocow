@@ -17,6 +17,16 @@ impl Scene {
         }
     }
 
+    pub fn from_sceneformat(scene: sceneformat::Scene) -> Self {
+        let mut s = Scene::new();
+
+        for object in &scene.scene_objects {
+            s.objects.push(scene_object_from_sceneformat(object));
+        }
+
+        s
+    }
+
     pub fn set_camera(&mut self, camera: Camera) {
         self.camera = Some(camera);
     }
@@ -40,4 +50,8 @@ impl Scene {
     pub fn lights(&self) -> &Vec<Box<dyn Light + Sync + Send>> {
         &self.lights
     }
+}
+
+fn scene_object_from_sceneformat(object: &sceneformat::SceneObject) -> Box<dyn SceneObject + Sync + Send> {
+    panic!("This scene object is not implemented: {:?}", object);
 }
