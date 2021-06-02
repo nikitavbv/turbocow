@@ -25,6 +25,19 @@ impl Transform {
         Self::new(Vector3::zero(), Vector3::zero())
     }
 
+    pub fn from_scene_format(transform: &sceneformat::Transform) -> Self {
+        let position = match &transform.position {
+            Some(v) => Vector3::new(v.x, v.y, v.z),
+            None => Vector3::zero(),
+        };
+        let rotation = match &transform.rotation {
+            Some(v) => Vector3::new(v.x, v.y, v.z),
+            None => Vector3::zero(),
+        };
+
+        Transform::new(position, rotation)
+    }
+
     pub fn position(&self) -> &Vector3 {
         &self.position
     }
