@@ -13,4 +13,5 @@ Mooooooo!
 
 ## Examples
 
-![](rended_examples/cow_smooth.png)
+![](rendered_examples/cow_smooth.png)
+![](rendered_examples/whitted_raytracer.png)
