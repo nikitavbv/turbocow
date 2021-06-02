@@ -29,8 +29,8 @@ impl SceneObject for Plane {
         &self.transform
     }
 
-    fn material(&self) -> &Material {
-        &self.material
+    fn material(&self) -> Material {
+        self.material.clone()
     }
 
     fn check_intersection(&self, ray: &Ray) -> Option<Intersection> {

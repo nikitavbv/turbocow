@@ -77,33 +77,40 @@ pub fn render_ray_with_depth(ray: &Ray, scene: &Scene, depth: u8) -> Pixel {
     let (intersect_obj, intersection) = intersect_obj.unwrap();
 
     if scene.lights().len() == 0 {
-        return intersect_obj.color();
+        return match intersect_obj.material() {
+            Material::Lambertian { albedo: _, color } => color.clone(),
+            _ => panic!("Please add lights to use materials other then lambertian"),
+        }
     }
 
-    let mut intensity = 0.0;
     let hit_point = ray.point(intersection.ray_distance());
     let hit_normal = intersection.normal();
 
-    for light in scene.lights() {
-        let bias = 0.001;
-
-        let ray_to_light = Ray::new(hit_point + hit_normal * bias, light.transform().rotation() * -1.0);
-
-        if find_intersection(&ray_to_light, scene).is_none() {
-            intensity += intersect_obj.albedo() / PI * light.illuminate(
-                &hit_normal,
-                light.transform().position().distance_to(intersect_obj.transform().position())
-            );
-        }
-    }
-
     match intersect_obj.material() {
-        Material::Default => intersect_obj.color() * intensity.min(1.0),
+        Material::Lambertian { albedo, color } => {
+            let mut intensity = 0.0;
+
+            for light in scene.lights() {
+                let bias = 0.001;
+
+                let ray_to_light = Ray::new(hit_point + hit_normal * bias, light.transform().rotation() * -1.0);
+
+                if find_intersection(&ray_to_light, scene).is_none() {
+                    intensity += albedo / PI * light.illuminate(
+                        &hit_normal,
+                        light.transform().position().distance_to(intersect_obj.transform().position())
+                    );
+                }
+            }
+
+            color.clone() * intensity.min(1.0)
+        },
         Material::Reflective => {
             let r = reflect(ray.direction(), hit_normal);
-            let bias = 0.1;
+            let bias = 0.001;
             render_ray_with_depth(&Ray::new(hit_point + hit_normal * bias, r), scene, depth + 1) * 0.8
-        }
+        },
+        other => panic!("Material is not implemented: {:?}", other),
     }
 }
 

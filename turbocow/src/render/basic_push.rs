@@ -17,6 +17,7 @@ use std::convert::TryInto;
 use crate::protocol::message::Message;
 use crate::protocol::socket::CowSocket;
 use crate::render::render::RenderError;
+use crate::render::basic::render_ray;
 
 #[derive(Component)]
 pub struct BasicPushRender {
@@ -75,54 +76,4 @@ impl Render for BasicPushRender {
     fn is_remote_write(&self) -> bool {
         true
     }
-}
-
-fn render_ray(ray: &Ray, scene: &Scene) -> Pixel {
-    let intersect_obj = find_intersection(&ray, &scene);
-
-    if intersect_obj.is_none() {
-        return Pixel::black();
-    }
-    let (intersect_obj, intersection) = intersect_obj.unwrap();
-
-    if scene.lights().len() == 0 {
-        return intersect_obj.color();
-    }
-
-    let mut intensity = 0.0;
-
-    for light in scene.lights() {
-        let hit_point = ray.point(intersection.ray_distance());
-        let hit_normal = intersection.normal();
-        let bias = 0.001;
-
-        let ray_to_light = Ray::new(hit_point + hit_normal * bias, light.transform().rotation() * -1.0);
-
-        if find_intersection(&ray_to_light, scene).is_none() {
-            intensity += intersect_obj.albedo() / PI * light.illuminate(
-                &hit_normal,
-                light.transform().position().distance_to(intersect_obj.transform().position())
-            );
-        }
-    }
-
-    intersect_obj.color() * intensity.min(1.0)
-}
-
-fn find_intersection<'a>(ray: &Ray, scene: &'a Scene) -> Option<(&'a Box<dyn SceneObject + Sync + Send>, Intersection)> {
-    let mut result = None;
-    let mut min_distance = f64::MAX;
-    let mut result_intersection = None;
-
-    for object in scene.objects() {
-        if let Some(intersection) = object.check_intersection(&ray) {
-            if intersection.ray_distance() < min_distance {
-                min_distance = intersection.ray_distance();
-                result = Some(object);
-                result_intersection = Some(intersection);
-            }
-        }
-    }
-
-    result.map(|v| (v, result_intersection.unwrap()))
 }

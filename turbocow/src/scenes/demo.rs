@@ -13,6 +13,7 @@ use crate::objects::cube::Cube;
 use crate::scene::point_light::PointLight;
 use crate::objects::plane::Plane;
 use crate::materials::material::Material;
+use turbocow_core::models::pixel::Pixel;
 
 #[derive(Component)]
 pub struct DemoSceneProvider {
@@ -32,7 +33,10 @@ impl SceneProvider for DemoSceneProvider {
         let plane = Plane::new(Transform::default(), Material::Reflective);
         scene.add_object(box plane);
 
-        let mut sphere = Sphere::new(Transform::new(Vector3::new(0.0, 2.0, 0.0), Vector3::zero()), 1.0);
+        let mut sphere = Sphere::new(Transform::new(Vector3::new(0.0, 2.0, 0.0), Vector3::zero()), Material::Lambertian {
+            albedo: 0.18,
+            color: Pixel::from_rgb(13, 71, 161),
+        }, 1.0);
         scene.add_object(box sphere);
 
         scene.add_light(box PointLight::new(

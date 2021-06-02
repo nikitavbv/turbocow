@@ -9,6 +9,7 @@ use crate::Resolve;
 use livestonk::Livestonk;
 use crate::objects::plane::Plane;
 use crate::materials::material::Material;
+use turbocow_core::models::pixel::Pixel;
 
 pub struct Scene {
     camera: Option<Camera>,
@@ -81,16 +82,24 @@ fn scene_object_from_sceneformat(object: &sceneformat::SceneObject) -> Box<dyn S
         None => Transform::new(Vector3::zero(), Vector3::zero()),
     };
 
+    let material = object.object_material.as_ref().map(|v| match v {
+        sceneformat::scene_object::ObjectMaterial::MaterialId(_) => panic!("Referencing materials by id is not implemented"),
+        sceneformat::scene_object::ObjectMaterial::Material(m) => match m.material.as_ref().unwrap() {
+            sceneformat::material::Material::LambertReflection(lambert) => Material::Lambertian { albedo: 0.18, color: Pixel::from_rgb((lambert.color.as_ref().unwrap().r * 255.0).round() as u8, (lambert.color.as_ref().unwrap().g * 255.0).round() as u8, (lambert.color.as_ref().unwrap().b * 255.0).round() as u8) },
+            sceneformat::material::Material::SpecularReflection(_) => panic!("Not implemented"),
+        }
+    }).unwrap_or(Material::Lambertian { albedo: 0.18, color: Pixel::from_rgb(194, 24, 91) });
+
     match mesh {
         sceneformat::scene_object::Mesh::Sphere(sphere) => {
-            box Sphere::new(transform, sphere.radius)
+            box Sphere::new(transform, material, sphere.radius)
         },
         sceneformat::scene_object::Mesh::MeshedObject(meshed_object) => {
             let model = model_loader.load(&meshed_object.reference).expect("Failed to load model");
             box PolygonObject::from_model(transform, &model)
         },
         sceneformat::scene_object::Mesh::Plane(_) => {
-            box Plane::new(transform, Material::Default)
+            box Plane::new(transform, material)
         }
         other => panic!("This mesh is not implemented: {:?}", other),
     }

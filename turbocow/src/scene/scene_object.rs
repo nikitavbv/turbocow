@@ -9,15 +9,10 @@ pub trait SceneObject {
 
     fn check_intersection(&self, ray: &Ray) -> Option<Intersection>;
 
-    fn albedo(&self) -> f64 {
-        0.18
-    }
-
-    fn color(&self) -> Pixel {
-        Pixel::from_rgb(20, 20, 220)
-    }
-
-    fn material(&self) -> &Material {
-        &Material::Default
+    fn material(&self) -> Material {
+        Material::Lambertian {
+            albedo: 0.18,
+            color: Pixel::from_rgb(20, 20, 220),
+        }
     }
 }

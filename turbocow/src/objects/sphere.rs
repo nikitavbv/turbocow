@@ -1,18 +1,21 @@
 use crate::{geometry::{ray::Ray, transform::Transform}, render::intersection::Intersection};
 use crate::scene::scene_object::SceneObject;
 use crate::geometry::vector3::Vector3;
+use crate::materials::material::Material;
 
 pub struct Sphere {
 
     transform: Transform,
+    material: Material,
     radius: f64,
 }
 
 impl Sphere {
 
-    pub fn new(transform: Transform, radius: f64) -> Self {
+    pub fn new(transform: Transform, material: Material, radius: f64) -> Self {
         Self {
             transform,
+            material,
             radius,
         }
     }
@@ -22,6 +25,10 @@ impl SceneObject for Sphere {
 
     fn transform(&self) -> &Transform {
         &self.transform
+    }
+
+    fn material(&self) -> Material {
+        self.material.clone()
     }
 
     fn check_intersection(&self, ray: &Ray) -> Option<Intersection> {
