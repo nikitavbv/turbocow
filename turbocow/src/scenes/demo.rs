@@ -21,8 +21,6 @@ impl SceneProvider for DemoSceneProvider {
     fn scene(&self, options: &HashMap<String, String>) -> Scene {
         let mut scene = Scene::new();
 
-        // let model = &self.model_loader.load(options.get("source").unwrap_or(&"assets/1.obj".to_string()))
-        // let model = &self.model_loader.load(options.get("source").unwrap_or(&"assets/dragon3.obj".to_string()))
         let model = &self.model_loader.load(options.get("source").unwrap_or(&"assets/cow.obj".to_string()))
             .expect("Failed to load model");
 

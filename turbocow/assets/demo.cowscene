@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "renderOptions": {
+    "cameraId": 1,
+    "width": 640,
+    "height": 360
+  },
+  "cameras": [
+    {
+      "id": 1,
+      "transform": {
+        "position": {
+          "x": 0,
+          "y": 0,
+          "z": 6
+        }
+      },
+      "perspective": {
+        "fov": 60
+      }
+    }
+  ],
+  "sceneObjects": [
+    {
+      "id": 2,
+      "transform": {
+        "position": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "material": {
+        "lambert_reflection": {
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          }
+        }
+      },
+      "sphere": {
+        "radius": 1.5
+      }
+    }
+  ]
+}

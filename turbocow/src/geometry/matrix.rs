@@ -26,7 +26,7 @@ impl Matrix44 {
     pub fn for_transformation(translation: &Vector3, rotation: &Vector3) -> Self {
         Self::empty()
             .apply_translation(translation)
-            .apply_rotation(rotation)
+            //.apply_rotation(rotation)
     }
 
     pub fn apply_translation(&self, translation: &Vector3) -> Matrix44 {
