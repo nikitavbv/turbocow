@@ -4,6 +4,7 @@ use crate::objects::triangle::Triangle;
 
 const DELTA: f64 = 1e-6;
 
+#[derive(Debug)]
 pub struct BoundingBox {
     pub first: Vector3,
     pub second: Vector3,

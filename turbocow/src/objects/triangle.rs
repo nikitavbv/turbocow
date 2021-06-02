@@ -12,6 +12,8 @@ pub struct Triangle {
     v2: Vector3,
 
     v0_applied: Vector3,
+    v1_applied: Vector3,
+    v2_applied: Vector3,
 
     v0v1: Vector3,
     v0v2: Vector3,
@@ -40,6 +42,8 @@ impl Triangle {
             v2,
 
             v0_applied,
+            v1_applied,
+            v2_applied,
 
             v0v1,
             v0v2,
@@ -58,6 +62,11 @@ impl Triangle {
         let v0v1 = v1_applied - v0_applied;
         let v0v2 = v2_applied - v0_applied;
 
+        let rotation_only_transform = Transform::new(Vector3::zero(), transform.rotation().clone());
+        let vn0 = rotation_only_transform.apply_for_point(&vn0);
+        let vn1 = rotation_only_transform.apply_for_point(&vn1);
+        let vn2 = rotation_only_transform.apply_for_point(&vn2);
+
         Self {
             transform,
 
@@ -66,6 +75,8 @@ impl Triangle {
             v2,
 
             v0_applied,
+            v1_applied,
+            v2_applied,
 
             v0v1,
             v0v2,
@@ -77,7 +88,7 @@ impl Triangle {
     }
 
     pub fn get_vertices(&self) -> [&Vector3; 3] {
-        [&self.v0, &self.v1, &self.v2]
+        [&self.v0_applied, &self.v1_applied, &self.v2_applied]
     }
 }
 
