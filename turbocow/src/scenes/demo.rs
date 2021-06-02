@@ -10,6 +10,9 @@ use crate::objects::sphere::Sphere;
 use crate::scene::distant_light::DistantLight;
 use std::collections::HashMap;
 use crate::objects::cube::Cube;
+use crate::scene::point_light::PointLight;
+use crate::objects::plane::Plane;
+use crate::materials::material::Material;
 
 #[derive(Component)]
 pub struct DemoSceneProvider {
@@ -21,33 +24,23 @@ impl SceneProvider for DemoSceneProvider {
     fn scene(&self, options: &HashMap<String, String>) -> Scene {
         let mut scene = Scene::new();
 
-        let model = &self.model_loader.load(options.get("source").unwrap_or(&"assets/cow.obj".to_string()))
-            .expect("Failed to load model");
-
         scene.set_camera(
             Camera::default()
-                // .with_transform(Transform::new(Vector3::new(0.0, 0.2, 1.5), Vector3::zero()))
-                .with_transform(Transform::new(Vector3::new(0.0, 0.9, 1.0), Vector3::new(90.0, 0.0, 90.0)))
+                .with_transform(Transform::new(Vector3::new(0.0, 1.0, 5.0), Vector3::zero()))
         );
 
-        //scene.add_object(box Sphere::new(Transform::new(Vector3::new(0.0, 0.0, -3.0), Vector3::zero()), 1.0));
-        scene.add_object(box PolygonObject::from_model(Transform::default(), &model));
-        //scene.add_object(box Cube::new(Transform::new(&Vector3::new(0.0, 0.0, -5.0)), 1.0));
+        let plane = Plane::new(Transform::default(), Material::Reflective);
+        scene.add_object(box plane);
 
-        /*scene.add_light(box DistantLight::new(
-            Transform::new(
-                Vector3::zero(),
-                Vector3::new(0.0, -35.0, 0.0)
-            ),
-            1.0
-        ));*/
+        let mut sphere = Sphere::new(Transform::new(Vector3::new(0.0, 2.0, 0.0), Vector3::zero()), 1.0);
+        scene.add_object(box sphere);
 
-        scene.add_light(box DistantLight::new(
+        scene.add_light(box PointLight::new(
             Transform::new(
-                Vector3::zero(),
-                Vector3::new(0.0, -45.0, -45.0)
+                Vector3::new(0.0, 4.0, 4.0),
+                Vector3::new(45.0, -45.0, -70.0)
             ),
-            0.4,
+            100.0,
         ));
 
         scene

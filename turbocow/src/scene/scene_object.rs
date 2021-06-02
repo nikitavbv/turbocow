@@ -1,6 +1,7 @@
 use crate::{render::intersection::Intersection, geometry::{ray::Ray, transform::Transform}};
 use crate::geometry::vector3::Vector3;
 use turbocow_core::models::pixel::Pixel;
+use crate::materials::material::Material;
 
 pub trait SceneObject {
 
@@ -14,5 +15,9 @@ pub trait SceneObject {
 
     fn color(&self) -> Pixel {
         Pixel::from_rgb(20, 20, 220)
+    }
+
+    fn material(&self) -> &Material {
+        &Material::Default
     }
 }

@@ -7,6 +7,8 @@ use crate::objects::polygon_object::PolygonObject;
 use crate::io::traits::ModelLoader;
 use crate::Resolve;
 use livestonk::Livestonk;
+use crate::objects::plane::Plane;
+use crate::materials::material::Material;
 
 pub struct Scene {
     camera: Option<Camera>,
@@ -87,6 +89,9 @@ fn scene_object_from_sceneformat(object: &sceneformat::SceneObject) -> Box<dyn S
             let model = model_loader.load(&meshed_object.reference).expect("Failed to load model");
             box PolygonObject::from_model(transform, &model)
         },
+        sceneformat::scene_object::Mesh::Plane(_) => {
+            box Plane::new(transform, Material::Default)
+        }
         other => panic!("This mesh is not implemented: {:?}", other),
     }
 }

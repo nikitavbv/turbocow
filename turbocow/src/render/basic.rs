@@ -9,6 +9,7 @@ use crate::{geometry::{ray::Ray, vector3::Vector3}, scene::{scene::Scene, scene_
 use super::render::Render;
 use crate::render::intersection::Intersection;
 use crate::render::render::RenderError;
+use crate::materials::material::{Material, reflect};
 
 #[derive(Component)]
 pub struct BasicRender {
@@ -58,10 +59,20 @@ impl Render for BasicRender {
 }
 
 pub fn render_ray(ray: &Ray, scene: &Scene) -> Pixel {
+    render_ray_with_depth(ray, scene, 0)
+}
+
+pub fn render_ray_with_depth(ray: &Ray, scene: &Scene, depth: u8) -> Pixel {
+    let background = Pixel::from_rgb(192, 212, 250);
+
+    if depth > 10 {
+        return background;
+    }
+
     let intersect_obj = find_intersection(&ray, &scene);
 
     if intersect_obj.is_none() {
-        return Pixel::black();
+        return background;
     }
     let (intersect_obj, intersection) = intersect_obj.unwrap();
 
@@ -70,10 +81,10 @@ pub fn render_ray(ray: &Ray, scene: &Scene) -> Pixel {
     }
 
     let mut intensity = 0.0;
+    let hit_point = ray.point(intersection.ray_distance());
+    let hit_normal = intersection.normal();
 
     for light in scene.lights() {
-        let hit_point = ray.point(intersection.ray_distance());
-        let hit_normal = intersection.normal();
         let bias = 0.001;
 
         let ray_to_light = Ray::new(hit_point + hit_normal * bias, light.transform().rotation() * -1.0);
@@ -86,7 +97,14 @@ pub fn render_ray(ray: &Ray, scene: &Scene) -> Pixel {
         }
     }
 
-    intersect_obj.color() * intensity.min(1.0)
+    match intersect_obj.material() {
+        Material::Default => intersect_obj.color() * intensity.min(1.0),
+        Material::Reflective => {
+            let r = reflect(ray.direction(), hit_normal);
+            let bias = 0.1;
+            render_ray_with_depth(&Ray::new(hit_point + hit_normal * bias, r), scene, depth + 1) * 0.8
+        }
+    }
 }
 
 fn find_intersection<'a>(ray: &Ray, scene: &'a Scene) -> Option<(&'a Box<dyn SceneObject + Sync + Send>, Intersection)> {

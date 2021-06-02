@@ -23,6 +23,10 @@ impl Vector3 {
         Self::new(1.0, 1.0, 1.0)
     }
 
+    pub fn up() -> Self {
+        Self::new(0.0, 1.0, 0.0)
+    }
+
     pub fn length(&self) -> f64 {
         self.length_squared().sqrt()
     }
@@ -106,6 +110,24 @@ impl Sub for &Vector3 {
 
     fn sub(self, rhs: Self) -> Vector3 {
         Vector3::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
+    }
+}
+
+impl Mul<Vector3> for f64 {
+
+    type Output = Vector3;
+
+    fn mul(self, rhs: Vector3) -> Self::Output {
+        rhs * self
+    }
+}
+
+impl Mul<&Vector3> for f64 {
+
+    type Output = Vector3;
+
+    fn mul(self, rhs: &Vector3) -> Self::Output {
+        rhs * self
     }
 }
 

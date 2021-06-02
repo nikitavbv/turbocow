@@ -8,6 +8,7 @@ extern crate custom_error;
 pub mod ui;
 pub mod geometry;
 pub mod io;
+pub mod materials;
 pub mod objects;
 pub mod protocol;
 pub mod render;
@@ -41,6 +42,7 @@ use std::collections::{HashSet, HashMap};
 use crate::ui::window::WindowOutput;
 use crate::render::render::RenderError;
 use crate::render::streaming::run_streaming_render;
+use crate::scenes::demo::DemoSceneProvider;
 
 const DEFAULT_LOGGING_LEVEL: &str = "info";
 
@@ -55,7 +57,9 @@ fn main() {
 
     livestonk::bind_to_instance!(dyn ImageFormatSupportPlugin, BMPFormatSupportPlugin::new());
     livestonk::bind!(dyn ModelLoader, ObjFileLoader);
-    livestonk::bind!(dyn SceneProvider, SceneFormatLoader);
+
+    //livestonk::bind!(dyn SceneProvider, SceneFormatLoader);
+    livestonk::bind!(dyn SceneProvider, DemoSceneProvider);
 
     run();
 
