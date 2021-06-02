@@ -59,28 +59,36 @@ impl Render for BasicRender {
 }
 
 pub fn render_ray(ray: &Ray, scene: &Scene) -> Pixel {
-    render_ray_with_depth(ray, scene, 0)
-}
-
-pub fn render_ray_with_depth(ray: &Ray, scene: &Scene, depth: u8) -> Pixel {
     let background = Pixel::from_rgb(192, 212, 250);
 
-    if depth > 10 {
-        return background;
+    render_ray_with_depth(ray, scene, 0).map(|v| {
+        Pixel::from_rgb(
+            (v.0.0 * 255.0).round() as u8,
+            (v.0.1 * 255.0).round() as u8,
+            (v.0.2 * 255.0).round() as u8
+        )
+    }).unwrap_or(background)
+}
+
+pub fn render_ray_with_depth(ray: &Ray, scene: &Scene, depth: u8) -> Option<((f64, f64, f64), Option<usize>)> {
+    let background = Pixel::from_rgb(192, 212, 250);
+
+    if depth > 2 {
+        return Some((pixel_to_tuple(&background), None));
     }
 
     let intersect_obj = find_intersection(&ray, &scene);
 
     if intersect_obj.is_none() {
-        return background;
+        return Some((pixel_to_tuple(&background), None));
     }
     let (intersect_obj, intersection) = intersect_obj.unwrap();
 
     if scene.lights().len() == 0 {
-        return match intersect_obj.material() {
-            Material::Lambertian { albedo: _, color } => color.clone(),
+        return Some((match intersect_obj.material() {
+            Material::Lambertian { albedo: _, color } => pixel_to_tuple(&color),
             _ => panic!("Please add lights to use materials other then lambertian"),
-        }
+        }, Some(intersect_obj.id())))
     }
 
     let hit_point = ray.point(intersection.ray_distance());
@@ -88,27 +96,53 @@ pub fn render_ray_with_depth(ray: &Ray, scene: &Scene, depth: u8) -> Pixel {
 
     match intersect_obj.material() {
         Material::Lambertian { albedo, color } => {
-            let mut intensity = 0.0;
+            let material_color = pixel_to_tuple(&color);
+            let mut color = (0.0, 0.0, 0.0);
 
+            // direct light
             for light in scene.lights() {
                 let bias = 0.001;
 
                 let ray_to_light = Ray::new(hit_point + hit_normal * bias, light.transform().rotation() * -1.0);
 
                 if find_intersection(&ray_to_light, scene).is_none() {
-                    intensity += albedo / PI * light.illuminate(
+                    let intensity = albedo / PI * light.illuminate(
                         &hit_normal,
                         light.transform().position().distance_to(intersect_obj.transform().position())
                     );
+                    color = tuple_add(color, tuple_multiply(material_color, intensity));
                 }
             }
 
-            color.clone() * intensity.min(1.0)
+            // indirect light
+            let mut indirect_color = (0.0, 0.0, 0.0);
+            let total_rays = 64;
+            for n in 0..total_rays {
+                let direction = Vector3::random_normalized();
+                let ray = Ray::new(hit_point + hit_normal * 0.001, direction);
+                let new_ray_result = render_ray_with_depth(&ray, scene, depth + 1);
+
+                if let Some(new_ray_result) = new_ray_result {
+                    if let Some(obj) = new_ray_result.1 {
+                        if obj != intersect_obj.id() {
+                            indirect_color = tuple_add(indirect_color, new_ray_result.0);
+                        }
+                    }
+                }
+            }
+            if total_rays > 0 {
+                indirect_color = tuple_multiply(indirect_color, 1.0 / (total_rays as f64));
+                color = tuple_add(color, indirect_color);
+            }
+
+            Some((color, Some(intersect_obj.id())))
         },
         Material::Reflective => {
             let r = reflect(ray.direction(), hit_normal);
             let bias = 0.001;
-            render_ray_with_depth(&Ray::new(hit_point + hit_normal * bias, r), scene, depth + 1) * 0.8
+
+            render_ray_with_depth(&Ray::new(hit_point + hit_normal * bias, r), scene, depth + 1)
+                .map(|v| (tuple_multiply(v.0, 0.8), Some(intersect_obj.id())))
         },
         other => panic!("Material is not implemented: {:?}", other),
     }
@@ -130,4 +164,16 @@ fn find_intersection<'a>(ray: &Ray, scene: &'a Scene) -> Option<(&'a Box<dyn Sce
     }
 
     result.map(|v| (v, result_intersection.unwrap()))
+}
+
+fn pixel_to_tuple(color: &Pixel) -> (f64, f64, f64) {
+    (color.red as f64 / 255.0, color.green as f64 / 255.0, color.blue as f64 / 255.0)
+}
+
+fn tuple_multiply(color: (f64, f64, f64), k: f64) -> (f64, f64, f64) {
+    (color.0 * k, color.1 * k, color.2 * k)
+}
+
+fn tuple_add(a: (f64, f64, f64), b: (f64, f64, f64)) -> (f64, f64, f64) {
+    (a.0 + b.0, a.1 + b.1, a.2 + b.2)
 }

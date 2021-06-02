@@ -92,7 +92,7 @@ fn scene_object_from_sceneformat(object: &sceneformat::SceneObject) -> Box<dyn S
 
     match mesh {
         sceneformat::scene_object::Mesh::Sphere(sphere) => {
-            box Sphere::new(transform, material, sphere.radius)
+            box Sphere::new(object.id as usize, transform, material, sphere.radius)
         },
         sceneformat::scene_object::Mesh::MeshedObject(meshed_object) => {
             let model = model_loader.load(&meshed_object.reference).expect("Failed to load model");

@@ -33,11 +33,17 @@ impl SceneProvider for DemoSceneProvider {
         let plane = Plane::new(Transform::default(), Material::Reflective);
         scene.add_object(box plane);
 
-        let mut sphere = Sphere::new(Transform::new(Vector3::new(0.0, 2.0, 0.0), Vector3::zero()), Material::Lambertian {
+        let mut sphere = Sphere::new(3, Transform::new(Vector3::new(0.0, 2.0, 0.0), Vector3::zero()), Material::Lambertian {
             albedo: 0.18,
             color: Pixel::from_rgb(13, 71, 161),
         }, 1.0);
         scene.add_object(box sphere);
+
+        let mut another_sphere = Sphere::new(4, Transform::new(Vector3::new(-3.0, 3.0, 2.0), Vector3::zero()), Material::Lambertian {
+            albedo: 0.18,
+            color: Pixel::from_rgb(13, 71, 161),
+        }, 1.0);
+        scene.add_object(box another_sphere);
 
         scene.add_light(box PointLight::new(
             Transform::new(

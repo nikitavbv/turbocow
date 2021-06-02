@@ -1,4 +1,5 @@
 use std::ops::{Add, Mul, Sub};
+use rand::Rng;
 
 const DELTA: f64 = 1e-5;
 
@@ -25,6 +26,14 @@ impl Vector3 {
 
     pub fn up() -> Self {
         Self::new(0.0, 1.0, 0.0)
+    }
+
+    pub fn random_normalized() -> Self {
+        Self::new(
+            rand::thread_rng().gen_range(-1.0..1.0),
+            rand::thread_rng().gen_range(-1.0..1.0),
+            rand::thread_rng().gen_range(-1.0..1.0)
+        ).normalized()
     }
 
     pub fn length(&self) -> f64 {

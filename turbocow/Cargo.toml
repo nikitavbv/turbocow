@@ -23,6 +23,7 @@ serde = { version = "1.0.125", features = ["derive"] }
 crossbeam = "0.8.0"
 byteorder = "1.4.3"
 sceneformat = { git = "https://github.com/computer-graphics-course/scene-format" }
+rand = "0.8.3"
 
 [profile.release]
 opt-level = 3

@@ -5,6 +5,7 @@ use crate::materials::material::Material;
 
 pub struct Sphere {
 
+    id: usize,
     transform: Transform,
     material: Material,
     radius: f64,
@@ -12,8 +13,9 @@ pub struct Sphere {
 
 impl Sphere {
 
-    pub fn new(transform: Transform, material: Material, radius: f64) -> Self {
+    pub fn new(id: usize, transform: Transform, material: Material, radius: f64) -> Self {
         Self {
+            id,
             transform,
             material,
             radius,
@@ -22,6 +24,10 @@ impl Sphere {
 }
 
 impl SceneObject for Sphere {
+
+    fn id(&self) -> usize {
+        self.id
+    }
 
     fn transform(&self) -> &Transform {
         &self.transform

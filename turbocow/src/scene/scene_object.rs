@@ -5,6 +5,10 @@ use crate::materials::material::Material;
 
 pub trait SceneObject {
 
+    fn id(&self) -> usize {
+        0
+    }
+
     fn transform(&self) -> &Transform;
 
     fn check_intersection(&self, ray: &Ray) -> Option<Intersection>;
