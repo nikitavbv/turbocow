@@ -15,3 +15,4 @@ Mooooooo!
 
 ![](rendered_examples/cow_smooth.png)
 ![](rendered_examples/whitted_raytracer.png)
+![](rendered_examples/two_spheres.png)
