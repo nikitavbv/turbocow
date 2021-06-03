@@ -3,24 +3,26 @@ use super::triangle::Triangle;
 use crate::geometry::vector3::Vector3;
 
 pub struct PolygonObject {
+    id: usize,
     transform: Transform,
     kd_tree: KDTree,
 }
 
 impl PolygonObject {
 
-    pub fn from_triangles(transform: Transform, triangles: Vec<Triangle>) -> Self {
+    pub fn from_triangles(id: usize, transform: Transform, triangles: Vec<Triangle>) -> Self {
         Self {
+            id,
             transform,
             kd_tree: build_tree(triangles)
         }
     }
 
-    pub fn from_model(transform: Transform, file: &Box<dyn Model>) -> Self {
-        Self::from_polygons(transform, file.polygons())
+    pub fn from_model(id: usize, transform: Transform, file: &Box<dyn Model>) -> Self {
+        Self::from_polygons(id, transform, file.polygons())
     }
 
-    pub fn from_polygons(transform: Transform, polygons: &Vec<Polygon>) -> Self {
+    pub fn from_polygons(id: usize, transform: Transform, polygons: &Vec<Polygon>) -> Self {
         let mut triangles = Vec::new();
         
         for polygon in polygons {
@@ -41,11 +43,15 @@ impl PolygonObject {
             }
         }
 
-        Self::from_triangles(transform, triangles)
+        Self::from_triangles(id, transform, triangles)
     }
 }
 
 impl SceneObject for PolygonObject {
+
+    fn id(&self) -> usize {
+        self.id
+    }
 
     fn transform(&self) -> &Transform {
         &self.transform

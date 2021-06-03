@@ -33,7 +33,7 @@ impl SceneProvider for DemoSceneProvider {
 
         let model_loader: Box<dyn ModelLoader> = Livestonk::resolve();
         let model = model_loader.load("assets/cow.obj").unwrap();
-        let cow = PolygonObject::from_model(
+        let cow = PolygonObject::from_model(1,
             Transform::new(Vector3::new(0.0, 0.32, 8.5), Vector3::new(90.0, 0.0, 0.0)),
             &model
         );
@@ -43,7 +43,7 @@ impl SceneProvider for DemoSceneProvider {
             albedo: 0.18,
             color: Pixel::from_rgb(13, 71, 161),
         };
-        let plane = Plane::new(Transform::default(), solid_blue);
+        let plane = Plane::new(2, Transform::default(), solid_blue);
         scene.add_object(box plane);
 
         /*

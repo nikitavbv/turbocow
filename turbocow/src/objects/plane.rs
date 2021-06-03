@@ -9,14 +9,16 @@ const DELTA: f64 = 1e-10;
 
 pub struct Plane {
 
+    id: usize,
     transform: Transform,
     material: Material,
 }
 
 impl Plane {
 
-    pub fn new(transform: Transform, material: Material) -> Self {
+    pub fn new(id: usize, transform: Transform, material: Material) -> Self {
         Self {
+            id,
             transform,
             material,
         }
@@ -24,6 +26,10 @@ impl Plane {
 }
 
 impl SceneObject for Plane {
+
+    fn id(&self) -> usize {
+        self.id
+    }
 
     fn transform(&self) -> &Transform {
         &self.transform

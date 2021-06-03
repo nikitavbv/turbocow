@@ -96,10 +96,10 @@ fn scene_object_from_sceneformat(object: &sceneformat::SceneObject) -> Box<dyn S
         },
         sceneformat::scene_object::Mesh::MeshedObject(meshed_object) => {
             let model = model_loader.load(&meshed_object.reference).expect("Failed to load model");
-            box PolygonObject::from_model(transform, &model)
+            box PolygonObject::from_model(object.id as usize, transform, &model)
         },
         sceneformat::scene_object::Mesh::Plane(_) => {
-            box Plane::new(transform, material)
+            box Plane::new(object.id as usize, transform, material)
         }
         other => panic!("This mesh is not implemented: {:?}", other),
     }
