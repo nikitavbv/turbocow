@@ -4,7 +4,6 @@ use crate::geometry::transform::Transform;
 use crate::objects::sphere::Sphere;
 use crate::geometry::vector3::Vector3;
 use crate::objects::polygon_object::PolygonObject;
-use crate::io::traits::ModelLoader;
 use crate::Resolve;
 use livestonk::Livestonk;
 use crate::objects::plane::Plane;
@@ -75,8 +74,6 @@ impl Scene {
 }
 
 fn scene_object_from_sceneformat(object: &sceneformat::SceneObject) -> Box<dyn SceneObject + Sync + Send> {
-    let model_loader: Box<dyn ModelLoader> = Livestonk::resolve();
-
     let mesh = match &object.mesh {
         Some(v) => v,
         None => panic!("This scene object has no mesh: {}", object.id),
@@ -102,8 +99,11 @@ fn scene_object_from_sceneformat(object: &sceneformat::SceneObject) -> Box<dyn S
             box Sphere::new(object.id as usize, transform, material, sphere.radius)
         },
         sceneformat::scene_object::Mesh::MeshedObject(meshed_object) => {
-            let model = model_loader.load(&meshed_object.reference).expect("Failed to load model");
-            box PolygonObject::from_model(object.id as usize, transform, &model)
+            box PolygonObject::from_model(
+                object.id as usize,
+                transform,
+                meshed_object.obj.as_ref().expect("Expected obj model to be loaded")
+            )
         },
         sceneformat::scene_object::Mesh::Plane(_) => {
             box Plane::new(object.id as usize, transform, material)

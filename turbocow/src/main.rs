@@ -7,7 +7,6 @@ extern crate custom_error;
 
 pub mod ui;
 pub mod geometry;
-pub mod io;
 pub mod materials;
 pub mod objects;
 pub mod protocol;
@@ -28,14 +27,12 @@ use livestonk::{bind, Livestonk};
 use bmp_support::BMPFormatSupportPlugin;
 
 use geometry::{ray::Ray, transform::Transform, vector3::Vector3};
-use io::obj::obj_file_reader::ObjFileLoader;
 use objects::{polygon_object::PolygonObject, triangle::Triangle};
 use render::{multithreaded::MultithreadedRender, render::Render};
 use scene::{camera::Camera, scene::Scene, scene_object::SceneObject};
 use crate::render::basic::BasicRender;
 use crate::render::basic_push::BasicPushRender;
 use crate::render::multithreaded_push::MultithreadedPushRender;
-use crate::io::traits::{Model, ModelLoader};
 use crate::scenes::provider::SceneProvider;
 use crate::scenes::sceneformat::SceneFormatLoader;
 use std::collections::{HashSet, HashMap};
@@ -51,14 +48,10 @@ fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or(DEFAULT_LOGGING_LEVEL)).init();
     print_intro();
 
-    //livestonk::bind!(dyn Render, MultithreadedRender);
     livestonk::bind!(dyn Render, MultithreadedPushRender);
 
     livestonk::bind_to_instance!(dyn ImageFormatSupportPlugin, BMPFormatSupportPlugin::new());
-    livestonk::bind!(dyn ModelLoader, ObjFileLoader);
-
     livestonk::bind!(dyn SceneProvider, SceneFormatLoader);
-    //livestonk::bind!(dyn SceneProvider, DemoSceneProvider);
 
     run();
 

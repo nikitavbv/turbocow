@@ -1,6 +1,8 @@
-use crate::{geometry::models::Polygon, geometry::transform::Transform, io::traits::Model, render::intersection::Intersection, geometry::ray::Ray, scene::scene_object::SceneObject, geometry::kdtree::KDTree, geometry::kdtree::build_tree};
+use crate::{geometry::models::Polygon, geometry::transform::Transform, render::intersection::Intersection, geometry::ray::Ray, scene::scene_object::SceneObject, geometry::kdtree::KDTree, geometry::kdtree::build_tree};
 use super::triangle::Triangle;
 use crate::geometry::vector3::Vector3;
+use std::collections::HashMap;
+use crate::geometry::models::Vertex;
 
 pub struct PolygonObject {
     id: usize,
@@ -18,8 +20,8 @@ impl PolygonObject {
         }
     }
 
-    pub fn from_model(id: usize, transform: Transform, file: &Box<dyn Model>) -> Self {
-        Self::from_polygons(id, transform, file.polygons())
+    pub fn from_model(id: usize, transform: Transform, file: &sceneformat::MeshGeometry) -> Self {
+        Self::from_polygons(id, transform, &polygons_from_file(file))
     }
 
     pub fn from_polygons(id: usize, transform: Transform, polygons: &Vec<Polygon>) -> Self {
@@ -74,4 +76,26 @@ impl SceneObject for PolygonObject {
 
         best_intersection
     }
+}
+
+fn polygons_from_file(meshed_object: &sceneformat::MeshGeometry) -> Vec<Polygon> {
+    let mut polygons = Vec::new();
+
+    for face in &meshed_object.faces {
+        let mut vertices = Vec::new();
+
+        for element in &face.elements {
+            let geometry = meshed_object.vertices.get(element.vertex_index as usize - 1)
+                .map(|v| Vector3::new(v.x, v.y, v.z))
+                .expect("expected referenced vertex to be present");
+            let normal = meshed_object.vertex_normals.get(element.normal_index as usize - 1)
+                .map(|v| Vector3::new(v.x, v.y, v.z))
+                .expect("expected references normal to be present");
+            vertices.push(Vertex::new(geometry, normal));
+        }
+
+        polygons.push(Polygon::new(vertices))
+    }
+
+    polygons
 }

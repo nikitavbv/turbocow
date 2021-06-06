@@ -4,11 +4,9 @@ use sceneformat::read;
 use livestonk::Component;
 use crate::scenes::provider::SceneProvider;
 use crate::scene::scene::Scene;
-use crate::io::traits::ModelLoader;
 
 #[derive(Component)]
 pub struct SceneFormatLoader {
-    model_loader: Box<dyn ModelLoader>,
 }
 
 impl SceneProvider for SceneFormatLoader {
