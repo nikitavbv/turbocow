@@ -1269,7 +1269,7 @@ checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 [[package]]
 name = "sceneformat"
 version = "0.1.0"
-source = "git+https://github.com/computer-graphics-course/scene-format#85cbd6fd1115661ef2b0366d895e8d5379bd0da5"
+source = "git+https://github.com/computer-graphics-course/scene-format#6daf0fa2f0556dfb3c3f32a7eef7bfdb32074986"
 dependencies = [
  "ctor",
  "custom_error",
