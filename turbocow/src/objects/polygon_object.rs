@@ -24,7 +24,7 @@ impl PolygonObject {
 
     pub fn from_polygons(id: usize, transform: Transform, polygons: &Vec<Polygon>) -> Self {
         let mut triangles = Vec::new();
-        
+
         for polygon in polygons {
             let ver = polygon.get_vertices();
             let pillar = ver[0].geometry();

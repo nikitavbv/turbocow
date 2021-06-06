@@ -10,6 +10,7 @@ use livestonk::Livestonk;
 use crate::objects::plane::Plane;
 use crate::materials::material::Material;
 use turbocow_core::models::pixel::Pixel;
+use crate::scene::point_light::PointLight;
 
 pub struct Scene {
     camera: Option<Camera>,
@@ -41,6 +42,10 @@ impl Scene {
             s.objects.push(scene_object_from_sceneformat(object));
         }
 
+        for light in &scene.lights {
+            s.lights.push(light_from_sceneformat(light));
+        }
+
         s
     }
 
@@ -70,7 +75,7 @@ impl Scene {
 }
 
 fn scene_object_from_sceneformat(object: &sceneformat::SceneObject) -> Box<dyn SceneObject + Sync + Send> {
-    let model_loader: Box<ModelLoader> = Livestonk::resolve();
+    let model_loader: Box<dyn ModelLoader> = Livestonk::resolve();
 
     let mesh = match &object.mesh {
         Some(v) => v,
@@ -85,7 +90,9 @@ fn scene_object_from_sceneformat(object: &sceneformat::SceneObject) -> Box<dyn S
     let material = object.object_material.as_ref().map(|v| match v {
         sceneformat::scene_object::ObjectMaterial::MaterialId(_) => panic!("Referencing materials by id is not implemented"),
         sceneformat::scene_object::ObjectMaterial::Material(m) => match m.material.as_ref().unwrap() {
-            sceneformat::material::Material::LambertReflection(lambert) => Material::Lambertian { albedo: 0.18, color: Pixel::from_rgb((lambert.color.as_ref().unwrap().r * 255.0).round() as u8, (lambert.color.as_ref().unwrap().g * 255.0).round() as u8, (lambert.color.as_ref().unwrap().b * 255.0).round() as u8) },
+            sceneformat::material::Material::LambertReflection(lambert) => {
+                Material::Lambertian { albedo: 0.18, color: Pixel::from_rgb((lambert.color.as_ref().unwrap().r * 255.0).round() as u8, (lambert.color.as_ref().unwrap().g * 255.0).round() as u8, (lambert.color.as_ref().unwrap().b * 255.0).round() as u8) }
+            },
             sceneformat::material::Material::SpecularReflection(_) => panic!("Not implemented"),
         }
     }).unwrap_or(Material::Lambertian { albedo: 0.18, color: Pixel::from_rgb(194, 24, 91) });
@@ -102,5 +109,32 @@ fn scene_object_from_sceneformat(object: &sceneformat::SceneObject) -> Box<dyn S
             box Plane::new(object.id as usize, transform, material)
         }
         other => panic!("This mesh is not implemented: {:?}", other),
+    }
+}
+
+fn light_from_sceneformat(light_obj: &sceneformat::Light) -> Box<dyn Light + Sync + Send> {
+    let light = match &light_obj.light {
+        Some(v) => v,
+        None => panic!("This light contains no light: {}", light_obj.id),
+    };
+
+    let transform = match &light_obj.transform {
+        Some(v) => Transform::from_scene_format(v),
+        None => Transform::new(Vector3::zero(), Vector3::zero()),
+    };
+
+    let intensity = match &light_obj.color {
+        Some(v) => v.r,
+        None => 1.0,
+    };
+
+    match light {
+        sceneformat::light::Light::Point(point) => {
+            box PointLight::new(
+                transform,
+                intensity,
+            )
+        },
+        other => panic!("This type of light is not implemented: {:?}", other),
     }
 }

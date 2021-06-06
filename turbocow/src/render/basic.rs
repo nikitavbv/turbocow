@@ -94,7 +94,7 @@ pub fn render_ray_with_depth(ray: &Ray, scene: &Scene, depth: u8) -> Option<((f6
     let hit_point = ray.point(intersection.ray_distance());
     let hit_normal = intersection.normal();
 
-    // To debug normales:
+    // To debug normals:
     // return Some((((hit_normal.x + 1.0) / 2.0, (hit_normal.y + 1.0) / 2.0, (hit_normal.z + 1.0) / 2.0), Some(intersect_obj.id())));
 
     match intersect_obj.material() {
@@ -119,7 +119,7 @@ pub fn render_ray_with_depth(ray: &Ray, scene: &Scene, depth: u8) -> Option<((f6
 
             // indirect light
             let mut indirect_color = (0.0, 0.0, 0.0);
-            let total_rays = 64; // 64;
+            let total_rays = 0; // 64;
             for n in 0..total_rays {
                 let direction = Vector3::random_normalized();
                 let ray = Ray::new(hit_point + hit_normal * 0.001, direction);

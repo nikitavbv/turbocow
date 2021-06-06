@@ -11,6 +11,11 @@ Mooooooo!
 - PNG - basic reading support. We have our own implementation of deflate.
 - JPEG - reading support (including full subsampling support) - reading 1920x1280 image in around 350ms, writing support (with quantization and Huffman tables used from GIMP, multiple quality levels are supported).
 
+## Running
+```
+cargo build --release && ./target/release/turbocow --source=./scenes/demo.cowscene --display
+```
+
 ## Examples
 
 ![](rendered_examples/cow_smooth.png)
