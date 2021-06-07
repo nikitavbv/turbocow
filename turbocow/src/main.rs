@@ -39,6 +39,7 @@ use std::collections::{HashSet, HashMap};
 use crate::ui::window::WindowOutput;
 use crate::render::render::RenderError;
 use crate::render::streaming::run_streaming_render;
+use crate::scenes::pack::run_pack;
 
 const DEFAULT_LOGGING_LEVEL: &str = "info";
 
@@ -86,6 +87,7 @@ fn run() {
         "ui" => ui::window::run_with_args(&commands[2..]),
         "connectivity_test" => protocol::connectivity_test::run_with_args(&commands[2..]),
         "streaming_render" => run_streaming_render(),
+        "pack" => run_pack(options),
         other => error!("Unknown mode: {}", other)
     }
 }
