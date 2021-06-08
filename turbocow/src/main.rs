@@ -4,8 +4,9 @@
 #[macro_use] 
 extern crate log;
 extern crate custom_error;
+extern crate redis;
 
-pub mod ui;
+pub mod distributed;
 pub mod geometry;
 pub mod materials;
 pub mod objects;
@@ -13,6 +14,7 @@ pub mod protocol;
 pub mod render;
 pub mod scene;
 pub mod scenes;
+pub mod ui;
 
 use std::path::Path;
 use std::{fs, env, thread};
@@ -40,6 +42,7 @@ use crate::ui::window::WindowOutput;
 use crate::render::render::RenderError;
 use crate::render::streaming::run_streaming_render;
 use crate::scenes::pack::run_pack;
+use crate::distributed::runner::run_distributed;
 
 const DEFAULT_LOGGING_LEVEL: &str = "info";
 
@@ -88,6 +91,7 @@ fn run() {
         "connectivity_test" => protocol::connectivity_test::run_with_args(&commands[2..]),
         "streaming_render" => run_streaming_render(),
         "pack" => run_pack(options),
+        "distributed" => run_distributed(&commands[2..], &options),
         other => error!("Unknown mode: {}", other)
     }
 }
