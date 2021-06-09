@@ -7,6 +7,7 @@ pub fn run_distributed(commands: &[String], options: &HashMap<String, String>) {
     match commands[0].as_str() {
         "init" => run_init(options),
         "status" => run_status(),
+        "reset" => run_reset(),
         other => error!("Unknown distributed command: {:?}", other),
     }
 }
@@ -34,6 +35,12 @@ fn run_status() {
     } else {
         info!("Status: task set ({} bytes)", result.len());
     }
+}
+
+fn run_reset() {
+    let (_, mut redis_connection) = connect_to_redis();
+    redis_connection.del::<String, ()>("turbocow_task".to_string()).expect("Failed to delete task from redis");
+    info!("Completed reset for task");
 }
 
 fn connect_to_redis() -> (redis::Client, redis::Connection) {
