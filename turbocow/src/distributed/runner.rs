@@ -38,12 +38,16 @@ fn run_init(options: &HashMap<String, String>) {
     };
 
     for y in (0..height).progress() {
+        let mut pipeline = &mut redis::pipe();
+
         for x in 0..width {
             let message = bincode::serialize(&DistributedMessage::ProcessPixel(x, y))
                 .expect("failed to serialize distributed message");
-            redis_connection.rpush::<String, Vec<u8>, ()>("turbocow_tasks".to_string(), message)
-                .expect("failed to add task to queue");
+            pipeline = pipeline.rpush::<String, Vec<u8>>("turbocow_tasks".to_string(), message)
+                .ignore();
         }
+
+        pipeline.query::<()>(&mut redis_connection).expect("failed to send a pipeline query to redis");
     }
 }
 
