@@ -57,14 +57,19 @@ fn run_status() {
 
     if result.len() == 0 {
         info!("Status: no task set");
+        return;
     } else {
         info!("Status: task set ({} bytes)", result.len());
     }
+
+    let total_tasks: usize = redis_connection.llen("turbocow_tasks").expect("Failed to get total tasks from redis");
+    info!("total tasks: {}", total_tasks);
 }
 
 fn run_reset() {
     let (_, mut redis_connection) = connect_to_redis();
     redis_connection.del::<String, ()>("turbocow_task".to_string()).expect("Failed to delete task from redis");
+    redis_connection.del::<String, ()>("turbocow_task".to_string()).expect("Failed to delete tasks from redis");
     info!("Completed reset for task");
 }
 
