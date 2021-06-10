@@ -25,6 +25,7 @@ byteorder = "1.4.3"
 sceneformat = { git = "https://github.com/computer-graphics-course/scene-format" }
 rand = "0.8.3"
 redis = "0.20.1"
+indicatif = "0.16.2"
 
 [profile.release]
 opt-level = 3

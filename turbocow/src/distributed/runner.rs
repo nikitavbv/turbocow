@@ -2,6 +2,13 @@ use std::collections::HashMap;
 use std::env::var;
 
 use redis::{Commands, RedisError};
+use serde::{Serialize, Deserialize};
+use indicatif::{ProgressBar, ProgressIterator};
+
+#[derive(Serialize, Deserialize)]
+enum DistributedMessage {
+    ProcessPixel(usize, usize),
+}
 
 pub fn run_distributed(commands: &[String], options: &HashMap<String, String>) {
     match commands[0].as_str() {
@@ -24,6 +31,20 @@ fn run_init(options: &HashMap<String, String>) {
     let (_, mut redis_connection) = connect_to_redis();
     redis_connection.set::<String, Vec<u8>, ()>("turbocow_task".to_string(), scene_binary)
         .expect("Failed to save turbocow_task to redis");
+
+    let (width, height) = match scene.render_options {
+        Some(v) => (v.width as usize, v.height as usize),
+        None => (1000, 1000)
+    };
+
+    for y in (0..height).progress() {
+        for x in 0..width {
+            let message = bincode::serialize(&DistributedMessage::ProcessPixel(x, y))
+                .expect("failed to serialize distributed message");
+            redis_connection.rpush::<String, Vec<u8>, ()>("turbocow_tasks".to_string(), message)
+                .expect("failed to add task to queue");
+        }
+    }
 }
 
 fn run_status() {
