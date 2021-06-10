@@ -52,8 +52,10 @@ fn run_init(options: &HashMap<String, String>) {
 }
 
 fn run_status() {
+    info!("connecting to redis...");
     let (_, mut redis_connection) = connect_to_redis();
     let result: Vec<u8> = redis_connection.get("turbocow_scene").expect("Failed to get task from redis");
+    info!("connected to redis");
 
     if result.len() == 0 {
         info!("Status: no scene set");
@@ -62,8 +64,17 @@ fn run_status() {
         info!("Status: scene set ({} bytes)", result.len());
     }
 
-    let total_tasks: usize = redis_connection.llen("turbocow_tasks").expect("Failed to get total tasks from redis");
-    info!("total tasks: {}", total_tasks);
+    let scene = sceneformat::decode(&result).expect("Failed to decode scene");
+    let (width, height) = match scene.render_options {
+        Some(v) => (v.width, v.height),
+        None => (1000, 1000)
+    };
+
+    let active_tasks: usize = redis_connection.llen("turbocow_tasks").expect("Failed to get total tasks from redis");
+    let total_tasks = width * height;
+    let completeness = ((active_tasks as f64 * 100.0) / (total_tasks as f64)) as u16;
+
+    info!("total tasks: {} ({}%)", active_tasks, completeness);
 }
 
 fn run_reset() {
