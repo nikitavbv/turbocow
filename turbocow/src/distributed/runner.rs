@@ -29,8 +29,8 @@ fn run_init(options: &HashMap<String, String>) {
 
     info!("Creating a new distributed task");
     let (_, mut redis_connection) = connect_to_redis();
-    redis_connection.set::<String, Vec<u8>, ()>("turbocow_task".to_string(), scene_binary)
-        .expect("Failed to save turbocow_task to redis");
+    redis_connection.set::<String, Vec<u8>, ()>("turbocow_scene".to_string(), scene_binary)
+        .expect("Failed to save turbocow_scene to redis");
 
     let (width, height) = match scene.render_options {
         Some(v) => (v.width as usize, v.height as usize),
@@ -53,13 +53,13 @@ fn run_init(options: &HashMap<String, String>) {
 
 fn run_status() {
     let (_, mut redis_connection) = connect_to_redis();
-    let result: Vec<u8> = redis_connection.get("turbocow_task").expect("Failed to get task from redis");
+    let result: Vec<u8> = redis_connection.get("turbocow_scene").expect("Failed to get task from redis");
 
     if result.len() == 0 {
-        info!("Status: no task set");
+        info!("Status: no scene set");
         return;
     } else {
-        info!("Status: task set ({} bytes)", result.len());
+        info!("Status: scene set ({} bytes)", result.len());
     }
 
     let total_tasks: usize = redis_connection.llen("turbocow_tasks").expect("Failed to get total tasks from redis");
@@ -68,8 +68,8 @@ fn run_status() {
 
 fn run_reset() {
     let (_, mut redis_connection) = connect_to_redis();
-    redis_connection.del::<String, ()>("turbocow_task".to_string()).expect("Failed to delete task from redis");
-    redis_connection.del::<String, ()>("turbocow_task".to_string()).expect("Failed to delete tasks from redis");
+    redis_connection.del::<String, ()>("turbocow_scene".to_string()).expect("Failed to delete task from redis");
+    redis_connection.del::<String, ()>("turbocow_tasks".to_string()).expect("Failed to delete tasks from redis");
     info!("Completed reset for task");
 }
 
