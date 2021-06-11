@@ -58,6 +58,32 @@ impl Render for BasicRender {
     }
 }
 
+pub fn render_pixel(scene: &Scene, viewport_width: usize, viewport_height: usize, x: usize, y: usize) -> Pixel {
+    let camera = scene.camera();
+
+    let transform = camera.transform();
+    let width = viewport_width;
+    let height = viewport_height;
+    let aspect_ratio = width as f64 / height as f64;
+    let field_of_view = (camera.field_of_view() / 2.0).tan();
+
+    let transformed_origin = transform.apply_for_point(transform.position());
+
+    let normalized_y = 1.0 - 2.0 * (y as f64 + 0.5) / height as f64;
+    let camera_y = normalized_y * field_of_view;
+
+    let normalized_x = 2.0 * (x as f64 + 0.5) / (width as f64) - 1.0;
+    let camera_x = normalized_x * aspect_ratio * field_of_view;
+
+    let direction = Vector3::new(camera_x, camera_y, -1.0).normalized();
+
+    let ray = Ray::new(
+        transformed_origin,
+        transform.apply_for_vector(&direction).normalized()
+    );
+    render_ray(&ray, &scene)
+}
+
 pub fn render_ray(ray: &Ray, scene: &Scene) -> Pixel {
     let background = Pixel::from_rgb(192, 212, 250);
 
