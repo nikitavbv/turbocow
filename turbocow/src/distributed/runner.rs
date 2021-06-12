@@ -84,7 +84,7 @@ fn run_worker() {
     let (pixel_tx, pixel_rx) = crossbeam::channel::unbounded();
     let task_io_thread = start_task_io_thread(task_tx.clone(), pixel_rx.clone());
 
-    let started_at = Instant::now();
+    let mut last_checkpoint = Instant::now();
     let mut total_pixels_rendered = 0;
 
     loop {
@@ -103,11 +103,12 @@ fn run_worker() {
         }
 
         total_pixels_rendered += 1;
-        if total_pixels_rendered % 1000 == 0 {
-            let seconds_passed = (Instant::now() - started_at).as_secs();
-            if seconds_passed > 0 {
-                info!("rendering pixels: {} pixels/second", total_pixels_rendered / seconds_passed);
-            }
+        let current_time = Instant::now();
+        let seconds_passed = (current_time - last_checkpoint).as_secs();
+        if seconds_passed >= 10 {
+            info!("rendering pixels: {} pixels/second", total_pixels_rendered / seconds_passed);
+            last_checkpoint = current_time;
+            total_pixels_rendered = 0;
         }
     }
 }
@@ -124,9 +125,13 @@ fn start_task_io_thread(task_tx: Sender<DistributedMessage>, pixel_rx: Receiver<
             let tasks_in_queue = task_tx.len();
             if tasks_in_queue == 0 {
                 target_queue_size = (target_queue_size * 2).min(4096);
-            } else if target_queue_size > 2 {
-                target_queue_size = target_queue_size - 1;
-                info!("queue is overloaded");
+                info!("queue does not have enough tasks, setting target size to: {:?}", target_queue_size);
+            } else if tasks_in_queue > 100 && target_queue_size > 512 {
+                target_queue_size = target_queue_size / 2;
+                info!("queue is overloaded, setting target size to {:?}", target_queue_size);
+            } else if tasks_in_queue > 16 {
+                target_queue_size = (target_queue_size - 1).max(8);
+                info!("queue is overloaded, setting target size to {:?}", target_queue_size);
             }
             let tasks_to_add = if tasks_in_queue < target_queue_size {
                 target_queue_size - tasks_in_queue
