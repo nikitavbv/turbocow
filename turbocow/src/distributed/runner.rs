@@ -8,7 +8,9 @@ use crate::render::basic::render_pixel;
 use crate::scene::scene::Scene;
 use minifb::{Window, WindowOptions, Key};
 use std::time::{Instant, Duration};
-use std::thread::sleep;
+use std::thread::{sleep, JoinHandle};
+use std::thread;
+use crossbeam::channel::{Sender, Receiver};
 
 #[derive(Serialize, Deserialize, Debug)]
 enum DistributedMessage {
@@ -78,36 +80,112 @@ fn run_worker() {
     };
     let scene = Scene::from_sceneformat(scene);
 
+    let (task_tx, task_rx) = crossbeam::channel::unbounded();
+    let (pixel_tx, pixel_rx) = crossbeam::channel::unbounded();
+    let task_io_thread = start_task_io_thread(task_tx.clone(), pixel_rx.clone());
+
+    let started_at = Instant::now();
+    let mut total_pixels_rendered = 0;
+
     loop {
-        let task: Vec<u8> = redis_connection.lpop("turbocow_tasks").expect("Failed to get task from redis");
-        if task.len() == 0 {
+        if task_rx.len() == 0 {
             // wait for new task to appear in queue.
             sleep(Duration::from_millis(16));
             continue;
         }
 
-        let task: DistributedMessage = bincode::deserialize(&task).expect("Failed to deserialize task");
+        let task = task_rx.recv()
+            .expect("Failed to read task from queue");
 
         match task {
-            DistributedMessage::ProcessPixel(x, y) => worker_process_pixel(&mut redis_connection, &scene, viewport_width, viewport_height, x, y),
+            DistributedMessage::ProcessPixel(x, y) => worker_process_pixel(&pixel_tx, &scene, viewport_width, viewport_height, x, y),
             other => panic!("Did not expect this message in tasks queue: {:?}", other),
+        }
+
+        total_pixels_rendered += 1;
+        if total_pixels_rendered % 1000 == 0 {
+            let seconds_passed = (Instant::now() - started_at).as_secs();
+            if seconds_passed > 0 {
+                info!("rendering pixels: {} pixels/second", total_pixels_rendered / seconds_passed);
+            }
         }
     }
 }
 
-fn worker_process_pixel(redis_connection: &mut redis::Connection, scene: &Scene, viewport_width: usize, viewport_height: usize, x: usize, y: usize) {
-    info!("processing pixel: {} {}", x, y);
-    let pixel = render_pixel(scene, viewport_width, viewport_height, x, y);
-    info!("Pixel is: {:?}", pixel);
+fn start_task_io_thread(task_tx: Sender<DistributedMessage>, pixel_rx: Receiver<DistributedMessage>) -> JoinHandle<()> {
+    thread::spawn(move || {
+        info!("connecting to redis (io thread)...");
+        let (_, mut redis_connection) = connect_to_redis();
+        info!("connected to redis (io thread)");
 
-    let message = bincode::serialize(&DistributedMessage::SetPixel {
+        let mut target_queue_size = 8;
+
+        loop {
+            let tasks_in_queue = task_tx.len();
+            if tasks_in_queue == 0 {
+                target_queue_size = (target_queue_size * 2).min(4096);
+            } else if target_queue_size > 2 {
+                target_queue_size = target_queue_size - 1;
+                info!("queue is overloaded");
+            }
+            let tasks_to_add = if tasks_in_queue < target_queue_size {
+                target_queue_size - tasks_in_queue
+            } else {
+                0
+            };
+
+            let mut io_performed = false;
+            if tasks_to_add > 0 {
+                let mut pipeline = &mut redis::pipe();
+                for _ in 0..tasks_to_add {
+                    pipeline = pipeline.lpop("turbocow_tasks");
+                }
+                let result: Vec<Vec<u8>> = pipeline.query(&mut redis_connection)
+                    .expect("Failed to get tasks from redis");
+
+                for task in result {
+                    if task.len() == 0 {
+                        break;
+                    }
+
+                    let task: DistributedMessage = bincode::deserialize(&task).expect("Failed to deserialize task");
+                    task_tx.send(task).expect("Failed to send task to queue");
+                    io_performed = true;
+                }
+            }
+
+            let pixels_in_queue = pixel_rx.len();
+            if pixels_in_queue > 0 {
+                let mut pipeline = &mut redis::pipe();
+                for _ in 0..pixels_in_queue {
+                    let pixel = pixel_rx.recv().expect("Failed to read pixel from queue");
+                    let pixel_msg = bincode::serialize(&pixel)
+                        .expect("Failed to serialize set pixel message");
+                    pipeline = pipeline.rpush("turbocow_pixels", pixel_msg).ignore();
+                    io_performed = true;
+                }
+                pipeline.query::<()>(&mut redis_connection)
+                    .expect("Failed to send pixels to turbocow_pixels");
+            }
+
+            thread::sleep(Duration::from_millis(if io_performed {
+                0
+            } else {
+                16
+            }));
+        }
+    })
+}
+
+fn worker_process_pixel(pixel_tx: &Sender<DistributedMessage>, scene: &Scene, viewport_width: usize, viewport_height: usize, x: usize, y: usize) {
+    let pixel = render_pixel(scene, viewport_width, viewport_height, x, y);
+    pixel_tx.send(DistributedMessage::SetPixel {
         x,
         y,
         r: pixel.red,
         g: pixel.green,
         b: pixel.blue,
-    }).expect("Failed to serialize pixel message");
-    redis_connection.rpush::<String, Vec<u8>, ()>("turbocow_pixels".to_string(), message).expect("Failed to send pixel to redis queue");
+    }).expect("Failed to write pixel to send queue");
 }
 
 fn run_display() {
