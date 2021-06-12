@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use std::env::var;
 
-use redis::{Commands, RedisError, Connection};
+use redis::{Commands, RedisError, Connection, ConnectionLike};
 use serde::{Serialize, Deserialize};
 use indicatif::{ProgressBar, ProgressIterator};
 use crate::render::basic::render_pixel;
 use crate::scene::scene::Scene;
+use minifb::{Window, WindowOptions, Key};
+use std::time::Instant;
 
 #[derive(Serialize, Deserialize, Debug)]
 enum DistributedMessage {
@@ -25,6 +27,7 @@ pub fn run_distributed(commands: &[String], options: &HashMap<String, String>) {
         "status" => run_status(),
         "reset" => run_reset(),
         "worker" => run_worker(),
+        "display" => run_display(),
         other => error!("Unknown distributed command: {:?}", other),
     }
 }
@@ -98,6 +101,69 @@ fn worker_process_pixel(redis_connection: &mut redis::Connection, scene: &Scene,
         b: pixel.blue,
     }).expect("Failed to serialize pixel message");
     redis_connection.rpush::<String, Vec<u8>, ()>("turbocow_pixels".to_string(), message).expect("Failed to send pixel to redis queue");
+}
+
+fn run_display() {
+    info!("connecting to redis...");
+    let (_, mut redis_connection) = connect_to_redis();
+    info!("connected to redis");
+
+    let scene: Vec<u8> = redis_connection.get("turbocow_scene").expect("Failed to get scene from redis");
+    let scene = sceneformat::decode(&scene).expect("Failed to decode scene");
+    let (width, height) = match scene.render_options {
+        Some(v) => (v.width as usize, v.height as usize),
+        None => (1000, 1000)
+    };
+
+    let mut window = Window::new(
+        "turbocow",
+        width,
+        height,
+        WindowOptions::default()
+    ).expect("Failed to create window");
+    window.limit_update_rate(Some(std::time::Duration::from_micros(16600))); // 60fps max
+
+    let mut buffer = vec![0; width * height];
+    for y in 0..height {
+        for x in 0..width {
+            if ((x / 40) + (y / 40)) % 2 == 1 {
+                buffer[y * width + x] = 255 << 16 | 255 << 8 | 255;
+            }
+        }
+    }
+
+    let mut prev_update_time = Instant::now();
+    while window.is_open() && !window.is_key_down(Key::Escape) {
+        let now = Instant::now();
+        if (now - prev_update_time).as_millis() >= 16 {
+            let mut pipeline = &mut redis::pipe();
+            let pixels_in_queue = redis_connection.llen::<&str, usize>("turbocow_pixels")
+                .expect("Failed to get total pixels in queue");
+            for _ in 0..pixels_in_queue {
+                pipeline = pipeline.lpop("turbocow_pixels".to_string());
+            }
+
+            let result: Vec<Vec<u8>> = pipeline.query(&mut redis_connection).unwrap();
+            for pixel_message in result {
+                if pixel_message.len() > 0 {
+                    let pixel_message: DistributedMessage = bincode::deserialize(&pixel_message)
+                        .expect("Failed to deserialize message as distributed message");
+
+                    match pixel_message {
+                        DistributedMessage::SetPixel { x, y, r, g, b } => {
+                            buffer[y * width + x] = ((r as u32) << 16) | ((g as u32) << 8) | (b as u32);
+                        },
+                        other => panic!("Unexpected message in pixel queue: {:?}"),
+                    }
+                }
+            }
+
+            prev_update_time = now;
+        }
+
+        window.update_with_buffer(&buffer, width, height)
+            .expect("failed to update window with buffer");
+    }
 }
 
 fn run_status() {
