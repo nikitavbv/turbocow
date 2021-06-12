@@ -7,7 +7,8 @@ use indicatif::{ProgressBar, ProgressIterator};
 use crate::render::basic::render_pixel;
 use crate::scene::scene::Scene;
 use minifb::{Window, WindowOptions, Key};
-use std::time::Instant;
+use std::time::{Instant, Duration};
+use std::thread::sleep;
 
 #[derive(Serialize, Deserialize, Debug)]
 enum DistributedMessage {
@@ -79,6 +80,12 @@ fn run_worker() {
 
     loop {
         let task: Vec<u8> = redis_connection.lpop("turbocow_tasks").expect("Failed to get task from redis");
+        if task.len() == 0 {
+            // wait for new task to appear in queue.
+            sleep(Duration::from_millis(16));
+            continue;
+        }
+
         let task: DistributedMessage = bincode::deserialize(&task).expect("Failed to deserialize task");
 
         match task {
