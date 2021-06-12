@@ -35,6 +35,7 @@ pub fn run_distributed(commands: &[String], options: &HashMap<String, String>) {
     }
 }
 
+//noinspection DuplicatedCode
 fn run_init(options: &HashMap<String, String>) {
     info!("Loading scene");
     let scene = sceneformat::read(
@@ -48,23 +49,55 @@ fn run_init(options: &HashMap<String, String>) {
     info!("Connected to redis");
     redis_connection.set::<String, Vec<u8>, ()>("turbocow_scene".to_string(), scene_binary)
         .expect("Failed to save turbocow_scene to redis");
+    info!("scene saved to redis");
 
     let (width, height) = match scene.render_options {
         Some(v) => (v.width as usize, v.height as usize),
         None => (1000, 1000)
     };
 
-    for y in (0..height).progress() {
-        let mut pipeline = &mut redis::pipe();
-
+    let mut tasks = Vec::new();
+    for y in 0..height {
         for x in 0..width {
-            let message = bincode::serialize(&DistributedMessage::ProcessPixel(x, y))
-                .expect("failed to serialize distributed message");
-            pipeline = pipeline.rpush::<String, Vec<u8>>("turbocow_tasks".to_string(), message)
-                .ignore();
+            tasks.push(DistributedMessage::ProcessPixel(x, y));
         }
+    }
 
-        pipeline.query::<()>(&mut redis_connection).expect("failed to send a pipeline query to redis");
+    let center = (width / 2, height / 2);
+    tasks.sort_by(|a, b| {
+        let a_dist = match a {
+            DistributedMessage::ProcessPixel(x, y) => {
+                (center.0 as isize - *x as isize).pow(2) + (center.1 as isize - *y as isize).pow(2)
+            },
+            other => panic!("Expected process pixel message, got: {:?}", other),
+        };
+        let b_dist = match b {
+            DistributedMessage::ProcessPixel(x, y) => {
+                (center.0 as isize - *x as isize).pow(2) + (center.1 as isize - *y as isize).pow(2)
+            },
+            other => panic!("Expected process pixel message, got: {:?}", other),
+        };
+
+        a_dist.partial_cmp(&b_dist).expect("Expected isize comparisong to succeed")
+    });
+
+    let mut pipeline = redis::pipe();
+    let mut pipeline_ref = &mut pipeline;
+    let mut tasks_in_pipeline = 0;
+    for i in (0..tasks.len()).progress() {
+        let task = &tasks[i];
+        let message = bincode::serialize(&task)
+                .expect("failed to serialize distributed message");
+        pipeline_ref = pipeline_ref.rpush::<String, Vec<u8>>("turbocow_tasks".to_string(), message)
+                .ignore();
+        tasks_in_pipeline += 1;
+
+        if tasks_in_pipeline >= 10000 || i == tasks.len() - 1 {
+            pipeline_ref.query::<()>(&mut redis_connection).expect("failed to send a pipeline query to redis");
+            tasks_in_pipeline = 0;
+            pipeline = redis::pipe();
+            pipeline_ref = &mut pipeline;
+        }
     }
 }
 
