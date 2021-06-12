@@ -45,6 +45,7 @@ fn run_init(options: &HashMap<String, String>) {
 
     info!("Creating a new distributed task");
     let (_, mut redis_connection) = connect_to_redis();
+    info!("Connected to redis");
     redis_connection.set::<String, Vec<u8>, ()>("turbocow_scene".to_string(), scene_binary)
         .expect("Failed to save turbocow_scene to redis");
 
@@ -68,11 +69,27 @@ fn run_init(options: &HashMap<String, String>) {
 }
 
 fn run_worker() {
+    run_worker_with_retries(0)
+}
+
+fn run_worker_with_retries(retries: usize) {
+    if retries > 10 {
+        error!("maximum number of retries for worker has reached. Quitting...");
+        return;
+    }
+
     info!("connecting to redis...");
     let (_, mut redis_connection) = connect_to_redis();
     info!("connected to redis");
 
-    let result: Vec<u8> = redis_connection.get("turbocow_scene").expect("Failed to get scene from redis");
+    let result: Vec<u8> = match redis_connection.get("turbocow_scene") {
+        Ok(v) => v,
+        Err(err) => {
+            warn!("failed to get scene from redis, retrying...");
+            thread::sleep(Duration::from_secs(1));
+            return run_worker_with_retries(retries + 1);
+        }
+    };
     let scene = sceneformat::decode(&result).expect("Failed to load sceneformat scene");
     let (viewport_width, viewport_height) = match &scene.render_options {
         Some(v) => (v.width as usize, v.height as usize),
@@ -120,19 +137,10 @@ fn start_task_io_thread(task_tx: Sender<DistributedMessage>, pixel_rx: Receiver<
         info!("connected to redis (io thread)");
 
         let mut target_queue_size = 8;
+        let max_queue_size = 4096;
 
         loop {
             let tasks_in_queue = task_tx.len();
-            if tasks_in_queue == 0 {
-                target_queue_size = (target_queue_size * 2).min(4096);
-                info!("queue does not have enough tasks, setting target size to: {:?}", target_queue_size);
-            } else if tasks_in_queue > 100 && target_queue_size > 512 {
-                target_queue_size = target_queue_size / 2;
-                info!("queue is overloaded, setting target size to {:?}", target_queue_size);
-            } else if tasks_in_queue > 16 {
-                target_queue_size = (target_queue_size - 1).max(8);
-                info!("queue is overloaded, setting target size to {:?}", target_queue_size);
-            }
             let tasks_to_add = if tasks_in_queue < target_queue_size {
                 target_queue_size - tasks_in_queue
             } else {
@@ -156,6 +164,21 @@ fn start_task_io_thread(task_tx: Sender<DistributedMessage>, pixel_rx: Receiver<
                     let task: DistributedMessage = bincode::deserialize(&task).expect("Failed to deserialize task");
                     task_tx.send(task).expect("Failed to send task to queue");
                     io_performed = true;
+                }
+
+                if io_performed {
+                    if tasks_in_queue == 0 {
+                        if target_queue_size < max_queue_size {
+                            target_queue_size = (target_queue_size * 2).min(max_queue_size);
+                            info!("queue does not have enough tasks, setting target size to: {:?}", target_queue_size);
+                        }
+                    } else if tasks_in_queue > 100 && target_queue_size > 512 {
+                        target_queue_size = target_queue_size / 2;
+                        info!("queue is overloaded, setting target size to {:?}", target_queue_size);
+                    } else if tasks_in_queue > 16 {
+                        target_queue_size = (target_queue_size - 1).max(8);
+                        info!("queue is overloaded, setting target size to {:?}", target_queue_size);
+                    }
                 }
             }
 
