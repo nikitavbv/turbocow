@@ -30,6 +30,7 @@ enum DistributedMessage {
 
 lazy_static! {
     static ref PROCESSED_PIXELS_COUNTER: IntCounter = int_counter("processed_pixels", "Number of pixels that have been rendered by this worker");
+    static ref WAITING_FOR_TASK_COUNTER: IntCounter = int_counter("waiting_for_task", "Event signalling that worker is waiting for new tasks");
 }
 
 pub fn run_distributed(commands: &[String], options: &HashMap<String, String>) {
@@ -158,6 +159,7 @@ fn run_worker_with_retries(retries: usize) {
     loop {
         if task_rx.len() == 0 {
             // wait for new task to appear in queue.
+            WAITING_FOR_TASK_COUNTER.inc();
             sleep(Duration::from_millis(16));
             continue;
         }
