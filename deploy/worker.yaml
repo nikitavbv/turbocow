@@ -14,11 +14,26 @@ spec:
     spec:
       containers:
       - name: turbocow-worker
-        image: registry.gitlab.com/turbocow/turbocow/turbocow:0.1.223
+        image: registry.gitlab.com/turbocow/turbocow/turbocow:0.1.224
         args: ['distributed', 'worker']
         env:
         - name: REDIS_ADDRESS
           value: 'redis'
+        - name: METRICS_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: metrics-config
+              key: metrics_endpoint
+        - name: MERTICS_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: metrics-auth
+              key: username
+        - name: METRICS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: metrics-auth
+              key: password
         resources:
           limits:
             memory: '1Gi'
