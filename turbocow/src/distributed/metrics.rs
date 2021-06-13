@@ -9,7 +9,7 @@ use std::time::Duration;
 
 lazy_static! {
     static ref REGISTRY: Registry = Registry::new_custom(
-        Some("turbocow_".to_string()),
+        Some("turbocow".to_string()),
         {
             let mut labels = HashMap::new();
             labels.insert(

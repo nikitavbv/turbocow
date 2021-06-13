@@ -1,0 +1,2 @@
+todo:
+- handle redis restarts
