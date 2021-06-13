@@ -1,16 +1,20 @@
 use std::collections::HashMap;
 use std::env::var;
+use std::time::{Instant, Duration};
+use std::thread::{sleep, JoinHandle};
+use std::thread;
 
 use redis::{Commands, RedisError, Connection, ConnectionLike};
 use serde::{Serialize, Deserialize};
 use indicatif::{ProgressBar, ProgressIterator};
+use minifb::{Window, WindowOptions, Key};
+use crossbeam::channel::{Sender, Receiver};
+use lazy_static::lazy_static;
+use prometheus::IntCounter;
+
 use crate::render::basic::render_pixel;
 use crate::scene::scene::Scene;
-use minifb::{Window, WindowOptions, Key};
-use std::time::{Instant, Duration};
-use std::thread::{sleep, JoinHandle};
-use std::thread;
-use crossbeam::channel::{Sender, Receiver};
+use crate::distributed::metrics::{int_counter, run_metrics_pusher_thread, metrics_endpoint};
 
 #[derive(Serialize, Deserialize, Debug)]
 enum DistributedMessage {
@@ -22,6 +26,10 @@ enum DistributedMessage {
         g: u8,
         b: u8,
     },
+}
+
+lazy_static! {
+    static ref PROCESSED_PIXELS_COUNTER: IntCounter = int_counter("processed_pixels", "Number of pixels that have been rendered by this worker");
 }
 
 pub fn run_distributed(commands: &[String], options: &HashMap<String, String>) {
@@ -102,7 +110,17 @@ fn run_init(options: &HashMap<String, String>) {
 }
 
 fn run_worker() {
-    run_worker_with_retries(0)
+    let metrics_pusher_handle = if metrics_endpoint().is_some() {
+        Some(run_metrics_pusher_thread())
+    } else {
+        None
+    };
+
+    run_worker_with_retries(0);
+
+    if let Some(handle) = metrics_pusher_handle {
+        handle.join().expect("Failed to join metrics pusher thread")
+    }
 }
 
 fn run_worker_with_retries(retries: usize) {
@@ -153,6 +171,7 @@ fn run_worker_with_retries(retries: usize) {
         }
 
         total_pixels_rendered += 1;
+        PROCESSED_PIXELS_COUNTER.inc();
         let current_time = Instant::now();
         let seconds_passed = (current_time - last_checkpoint).as_secs();
         if seconds_passed >= 10 {

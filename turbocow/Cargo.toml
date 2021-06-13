@@ -26,6 +26,9 @@ sceneformat = { git = "https://github.com/computer-graphics-course/scene-format"
 rand = "0.8.3"
 redis = "0.20.1"
 indicatif = "0.16.2"
+prometheus = "0.12.0"
+hostname = "0.3.1"
+lazy_static = "1.4.0"
 
 [profile.release]
 opt-level = 3
