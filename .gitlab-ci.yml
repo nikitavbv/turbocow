@@ -7,11 +7,4 @@ variables:
   IMAGE_VERSION_PREFIX: '0.1'
 
 include:
-  - local: 'ci/templates.yml'
-  - local: 'ci/images.yml'
-  - local: 'ci/bmp_support.yml'
-#  - local: 'ci/gif_support.yml'
-#  - local: 'ci/jpeg_support.yml'
-  - local: 'ci/png_support.yml'
-  - local: 'ci/turbocow.yml'
-  - local: 'ci/converter.yml'
+  - local: 'ci/*.yml'
