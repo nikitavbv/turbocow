@@ -1,4 +1,4 @@
-FROM frolvlad/alpine-glibc:alpine-3.12_glibc-2.32
+FROM frolvlad/alpine-glibc:alpine-3.13_glibc-2.33
 WORKDIR /app
 ARG CRATE_NAME
 
