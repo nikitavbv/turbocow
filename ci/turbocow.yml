@@ -8,6 +8,7 @@
       - images/service.Dockerfile
       - ci/templates.yml
       - ci/turbocow.yml
+      - .gitlab-ci.yml
 
 turbocow test:
   extends: 
