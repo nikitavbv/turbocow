@@ -18,8 +18,9 @@ use crate::distributed::metrics::{int_counter, run_metrics_pusher_thread, metric
 
 #[derive(Serialize, Deserialize, Debug)]
 enum DistributedMessage {
-    ProcessPixel(usize, usize),
+    ProcessPixel(u64, usize, usize),
     SetPixel {
+        task_id: u64,
         x: usize,
         y: usize,
         r: u8,
@@ -56,7 +57,12 @@ fn run_init(options: &HashMap<String, String>) {
     info!("Creating a new distributed task");
     let (_, mut redis_connection) = connect_to_redis();
     info!("Connected to redis");
-    redis_connection.set::<String, Vec<u8>, ()>("turbocow_scene".to_string(), scene_binary)
+
+    let task_id = redis_connection.incr::<&str, u64, u64>("turbocow_task_id_counter", 1)
+        .expect("Failed to increment task id counter in redis");
+    info!("task id is: {:?}", task_id);
+
+    redis_connection.set::<String, Vec<u8>, ()>(format!("turbocow_scene:{}", task_id), scene_binary)
         .expect("Failed to save turbocow_scene to redis");
     info!("scene saved to redis");
 
@@ -68,26 +74,26 @@ fn run_init(options: &HashMap<String, String>) {
     let mut tasks = Vec::new();
     for y in 0..height {
         for x in 0..width {
-            tasks.push(DistributedMessage::ProcessPixel(x, y));
+            tasks.push(DistributedMessage::ProcessPixel(task_id, x, y));
         }
     }
 
     let center = (width / 2, height / 2);
     tasks.sort_by(|a, b| {
         let a_dist = match a {
-            DistributedMessage::ProcessPixel(x, y) => {
+            DistributedMessage::ProcessPixel(_, x, y) => {
                 (center.0 as isize - *x as isize).pow(2) + (center.1 as isize - *y as isize).pow(2)
             },
             other => panic!("Expected process pixel message, got: {:?}", other),
         };
         let b_dist = match b {
-            DistributedMessage::ProcessPixel(x, y) => {
+            DistributedMessage::ProcessPixel(_, x, y) => {
                 (center.0 as isize - *x as isize).pow(2) + (center.1 as isize - *y as isize).pow(2)
             },
             other => panic!("Expected process pixel message, got: {:?}", other),
         };
 
-        a_dist.partial_cmp(&b_dist).expect("Expected isize comparisong to succeed")
+        a_dist.partial_cmp(&b_dist).expect("Expected isize comparison to succeed")
     });
 
     let mut pipeline = redis::pipe();
@@ -134,20 +140,9 @@ fn run_worker_with_retries(retries: usize) {
     let (_, mut redis_connection) = connect_to_redis();
     info!("connected to redis");
 
-    let result: Vec<u8> = match redis_connection.get("turbocow_scene") {
-        Ok(v) => v,
-        Err(err) => {
-            warn!("failed to get scene from redis, retrying...");
-            thread::sleep(Duration::from_secs(1));
-            return run_worker_with_retries(retries + 1);
-        }
-    };
-    let scene = sceneformat::decode(&result).expect("Failed to load sceneformat scene");
-    let (viewport_width, viewport_height) = match &scene.render_options {
-        Some(v) => (v.width as usize, v.height as usize),
-        None => (1000, 1000),
-    };
-    let scene = Scene::from_sceneformat(scene);
+    let mut scene: Option<Scene> = None;
+    let mut current_scene_id: Option<u64> = None;
+    let mut viewport_params: Option<(usize, usize)> = None;
 
     let (task_tx, task_rx) = crossbeam::channel::unbounded();
     let (pixel_tx, pixel_rx) = crossbeam::channel::unbounded();
@@ -168,7 +163,36 @@ fn run_worker_with_retries(retries: usize) {
             .expect("Failed to read task from queue");
 
         match task {
-            DistributedMessage::ProcessPixel(x, y) => worker_process_pixel(&pixel_tx, &scene, viewport_width, viewport_height, x, y),
+            DistributedMessage::ProcessPixel(scene_id, x, y) => {
+                if current_scene_id.is_none() || scene_id != current_scene_id.unwrap() {
+                    current_scene_id = Some(scene_id);
+
+                    let result: Vec<u8> = match redis_connection.get("turbocow_scene") {
+                        Ok(v) => v,
+                        Err(err) => {
+                            warn!("failed to get scene from redis, retrying...");
+                            thread::sleep(Duration::from_secs(1));
+                            return run_worker_with_retries(retries + 1);
+                        }
+                    };
+                    let decoded = sceneformat::decode(&result).expect("Failed to load sceneformat scene");
+                    viewport_params = match &decoded.render_options {
+                        Some(v) => Some((v.width as usize, v.height as usize)),
+                        None => Some((1000, 1000)),
+                    };
+                    scene = Some(Scene::from_sceneformat(decoded));
+                }
+
+                worker_process_pixel(
+                    &pixel_tx,
+                    scene_id,
+                    &scene.as_ref().unwrap(),
+                    viewport_params.unwrap().0,
+                    viewport_params.unwrap().1,
+                    x,
+                    y
+                )
+            },
             other => panic!("Did not expect this message in tasks queue: {:?}", other),
         }
 
@@ -259,9 +283,10 @@ fn start_task_io_thread(task_tx: Sender<DistributedMessage>, pixel_rx: Receiver<
     })
 }
 
-fn worker_process_pixel(pixel_tx: &Sender<DistributedMessage>, scene: &Scene, viewport_width: usize, viewport_height: usize, x: usize, y: usize) {
+fn worker_process_pixel(pixel_tx: &Sender<DistributedMessage>, task_id: u64, scene: &Scene, viewport_width: usize, viewport_height: usize, x: usize, y: usize) {
     let pixel = render_pixel(scene, viewport_width, viewport_height, x, y);
     pixel_tx.send(DistributedMessage::SetPixel {
+        task_id,
         x,
         y,
         r: pixel.red,
@@ -275,7 +300,10 @@ fn run_display() {
     let (_, mut redis_connection) = connect_to_redis();
     info!("connected to redis");
 
-    let scene: Vec<u8> = redis_connection.get("turbocow_scene").expect("Failed to get scene from redis");
+    let last_task_id: u64 = redis_connection.get("turbocow_task_id_counter")
+        .expect("Failed to get the value of task id counter");
+
+    let scene: Vec<u8> = redis_connection.get(format!("turbocow_scene:{}", last_task_id)).expect("Failed to get scene from redis");
     let scene = sceneformat::decode(&scene).expect("Failed to decode scene");
     let (width, height) = match scene.render_options {
         Some(v) => (v.width as usize, v.height as usize),
@@ -317,7 +345,7 @@ fn run_display() {
                         .expect("Failed to deserialize message as distributed message");
 
                     match pixel_message {
-                        DistributedMessage::SetPixel { x, y, r, g, b } => {
+                        DistributedMessage::SetPixel { task_id: _, x, y, r, g, b } => {
                             buffer[y * width + x] = ((r as u32) << 16) | ((g as u32) << 8) | (b as u32);
                         },
                         other => panic!("Unexpected message in pixel queue: {:?}"),
@@ -338,7 +366,12 @@ fn run_status() {
     let (_, mut redis_connection) = connect_to_redis();
     info!("connected to redis");
 
-    let result: Vec<u8> = redis_connection.get("turbocow_scene").expect("Failed to get scene from redis");
+    let last_task_id: u64 = redis_connection.get("turbocow_task_id_counter")
+        .expect("Failed to get the value of task id counter");
+
+    let result: Vec<u8> = redis_connection.get(
+        format!("turbocow_scene:{}", last_task_id)
+    ).expect("Failed to get scene from redis");
 
     if result.len() == 0 {
         info!("Status: no scene set");
@@ -365,7 +398,12 @@ fn run_status() {
 
 fn run_reset() {
     let (_, mut redis_connection) = connect_to_redis();
-    redis_connection.del::<String, ()>("turbocow_scene".to_string()).expect("Failed to delete task from redis");
+
+    // TODO: delete everything with turbocow_ prefix
+    let last_task_id: u64 = redis_connection.get("turbocow_task_id_counter")
+        .expect("Failed to get the value of task id counter");
+
+    redis_connection.del::<String, ()>(format!("turbocow_scene:{}", last_task_id)).expect("Failed to delete task from redis");
     redis_connection.del::<String, ()>("turbocow_tasks".to_string()).expect("Failed to delete tasks from redis");
     redis_connection.del::<String, ()>("turbocow_pixels".to_string()).expect("Failed to delete pixels from redis");
     info!("Completed reset for task");
