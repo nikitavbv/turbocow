@@ -148,9 +148,6 @@ fn run_worker_with_retries(retries: usize) {
     let (pixel_tx, pixel_rx) = crossbeam::channel::unbounded();
     let task_io_thread = start_task_io_thread(task_tx.clone(), pixel_rx.clone());
 
-    let mut last_checkpoint = Instant::now();
-    let mut total_pixels_rendered = 0;
-
     loop {
         if task_rx.len() == 0 {
             // wait for new task to appear in queue.
@@ -196,15 +193,7 @@ fn run_worker_with_retries(retries: usize) {
             other => panic!("Did not expect this message in tasks queue: {:?}", other),
         }
 
-        total_pixels_rendered += 1;
         PROCESSED_PIXELS_COUNTER.inc();
-        let current_time = Instant::now();
-        let seconds_passed = (current_time - last_checkpoint).as_secs();
-        if seconds_passed >= 10 {
-            info!("rendering pixels: {} pixels/second", total_pixels_rendered / seconds_passed);
-            last_checkpoint = current_time;
-            total_pixels_rendered = 0;
-        }
     }
 }
 
@@ -366,19 +355,20 @@ fn run_status() {
     let (_, mut redis_connection) = connect_to_redis();
     info!("connected to redis");
 
-    let last_task_id: u64 = redis_connection.get("turbocow_task_id_counter")
+    let last_task_id: Option<u64> = redis_connection.get("turbocow_task_id_counter")
         .expect("Failed to get the value of task id counter");
+
+    let last_task_id = match last_task_id {
+        Some(v) => v,
+        None => {
+            info!("Status: no task id set");
+            return;
+        }
+    };
 
     let result: Vec<u8> = redis_connection.get(
         format!("turbocow_scene:{}", last_task_id)
     ).expect("Failed to get scene from redis");
-
-    if result.len() == 0 {
-        info!("Status: no scene set");
-        return;
-    } else {
-        info!("Status: scene set ({} bytes)", result.len());
-    }
 
     let scene = sceneformat::decode(&result).expect("Failed to decode scene");
     let (width, height) = match scene.render_options {
@@ -399,13 +389,15 @@ fn run_status() {
 fn run_reset() {
     let (_, mut redis_connection) = connect_to_redis();
 
-    // TODO: delete everything with turbocow_ prefix
-    let last_task_id: u64 = redis_connection.get("turbocow_task_id_counter")
-        .expect("Failed to get the value of task id counter");
+    // keyspace is not big, so using "keys" is ok here
+    let keys: Vec<String> = redis_connection.keys("turbocow_*")
+        .expect("Failed to get keys");
 
-    redis_connection.del::<String, ()>(format!("turbocow_scene:{}", last_task_id)).expect("Failed to delete task from redis");
-    redis_connection.del::<String, ()>("turbocow_tasks".to_string()).expect("Failed to delete tasks from redis");
-    redis_connection.del::<String, ()>("turbocow_pixels".to_string()).expect("Failed to delete pixels from redis");
+    for key in &keys {
+        redis_connection.del::<&str, ()>(key)
+            .expect(&format!("Failed to delete key from redis: {:?}", key));
+    }
+
     info!("Completed reset for task");
 }
 
