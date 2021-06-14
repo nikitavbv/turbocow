@@ -52,8 +52,8 @@ impl Scene {
         self.camera = Some(camera);
     }
 
-    pub fn camera(&self) -> &Camera {
-        self.camera.as_ref().expect("expected camera to be present")
+    pub fn camera(&self) -> Option<&Camera> {
+        self.camera.as_ref()
     }
 
     pub fn add_object(&mut self, obj: Box<dyn SceneObject + Sync + Send>) {

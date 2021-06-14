@@ -164,7 +164,7 @@ fn run_worker_with_retries(retries: usize) {
                 if current_scene_id.is_none() || scene_id != current_scene_id.unwrap() {
                     current_scene_id = Some(scene_id);
 
-                    let result: Vec<u8> = match redis_connection.get("turbocow_scene") {
+                    let result: Vec<u8> = match redis_connection.get(format!("turbocow_scene:{}", scene_id)) {
                         Ok(v) => v,
                         Err(err) => {
                             warn!("failed to get scene from redis, retrying...");

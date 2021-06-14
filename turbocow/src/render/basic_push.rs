@@ -36,7 +36,7 @@ impl Render for BasicPushRender {
     fn render(&self, scene: &Scene, render_to: &mut Image) -> Result<(), RenderError> {
         let socket = CowSocket::start_client(Ipv4Addr::LOCALHOST)?;
 
-        let camera = scene.camera();
+        let camera = scene.camera().expect("Expected camera to be present");
 
         let transform = camera.transform();
         let width = render_to.width;

@@ -38,7 +38,7 @@ impl Render for MultithreadedRender {
 }
 
 fn worker(scene: &Scene, output: &mut [Pixel], chunk: usize, chunk_size: usize, width: usize, height: usize) {
-    let camera = scene.camera();
+    let camera = scene.camera().expect("Expected camera to be present");
 
     let transform = camera.transform();
     let aspect_ratio = width as f64 / height as f64;

@@ -26,7 +26,7 @@ impl BasicRender {
 impl Render for BasicRender {
 
     fn render(&self, scene: &Scene, render_to: &mut Image) -> Result<(), RenderError> {
-        let camera = scene.camera();
+        let camera = scene.camera().expect("Expected camera to be present");
 
         let transform = camera.transform();
         let width = render_to.width;
@@ -59,7 +59,7 @@ impl Render for BasicRender {
 }
 
 pub fn render_pixel(scene: &Scene, viewport_width: usize, viewport_height: usize, x: usize, y: usize) -> Pixel {
-    let camera = scene.camera();
+    let camera = scene.camera().expect("Expected camera to be present");
 
     let transform = camera.transform();
     let width = viewport_width;
