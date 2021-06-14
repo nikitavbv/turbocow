@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: turbocow-worker
-        image: registry.gitlab.com/turbocow/turbocow/turbocow:0.1.224
+        image: registry.gitlab.com/turbocow/turbocow/turbocow:0.1.230
         args: ['distributed', 'worker']
         env:
         - name: REDIS_ADDRESS
