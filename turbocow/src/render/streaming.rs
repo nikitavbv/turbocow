@@ -58,6 +58,4 @@ fn start_streaming(socket: CowSocket, metadata: MessageMetadata) {
 
         image_tx.send(output.clone());
     }
-
-    stream_handle.join();
 }
