@@ -56,6 +56,6 @@ fn start_streaming(socket: CowSocket, metadata: MessageMetadata) {
             continue;
         }
 
-        image_tx.send(output.clone());
+        image_tx.send(output.clone()).expect("Failed to send output to image queue");
     }
 }
