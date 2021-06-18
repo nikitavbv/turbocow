@@ -11,11 +11,11 @@ pub fn reflect(i: &Vector3, n: &Vector3) -> Vector3 {
     i.clone() - 2.0 * i.dot_product(n) * n
 }
 
-pub fn refract(i: &Vector3, N: &Vector3, ior: f64) -> Vector3 {
-    let mut cosi = i.dot_product(N).max(-1.0).min(1.0);
+pub fn refract(i: &Vector3, ni: &Vector3, ior: f64) -> Vector3 {
+    let mut cosi = i.dot_product(ni).max(-1.0).min(1.0);
     let mut etai = 1.0;
     let mut etat = ior;
-    let mut n = N.clone();
+    let mut n = ni.clone();
 
     if cosi < 0.0 {
         cosi = -cosi;
@@ -23,7 +23,7 @@ pub fn refract(i: &Vector3, N: &Vector3, ior: f64) -> Vector3 {
         let t = etai;
         etai = etat;
         etat = t;
-        n = -1.0 * N;
+        n = -1.0 * ni;
     }
 
     let eta = etai / etat;
