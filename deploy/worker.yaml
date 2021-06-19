@@ -6,7 +6,7 @@ spec:
   selector:
     matchLabels:
       app: turbocow-worker
-  replicas: 0
+  replicas: 16
   template:
     metadata:
       labels:
@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: turbocow-worker
-        image: registry.gitlab.com/turbocow/turbocow/turbocow:0.1.230
+        image: registry.gitlab.com/turbocow/turbocow/turbocow:0.1.235
         args: ['distributed', 'worker']
         env:
         - name: REDIS_ADDRESS
