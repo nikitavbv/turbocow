@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "renderOptions": {
+    "cameraId": 1,
+    "width": 1000,
+    "height": 1000,
+    "customProperties": [{
+        "key": "animationConfig",
+        "text_value": "[{\"id\": 2, \"duration\": 60.0, \"end_state\": {\"rotation\": {\"y\": 180}}]"
+    }]
+  },
+  "cameras": [
+    {
+      "id": 1,
+      "transform": {
+        "parentId": 0,
+        "position": {
+          "x": 0,
+          "y": 0.5,
+          "z": 5.0
+        }
+      },
+      "perspective": {
+        "fov": 60
+      }
+    }
+  ],
+  "sceneObjects": [
+    {
+      "id": 2,
+      "transform": {
+        "parentId": 0,
+        "position": {
+          "x": 0,
+          "y": 0.32,
+          "z": 8.5
+        },
+        "rotation": {
+          "x": 90.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "material": {
+        "lambert_reflection": {
+          "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1
+          }
+        }
+      },
+      "mesh": {
+        "meshedObject": {
+          "reference": "../assets/cow.obj"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "material": {
+        "lambert_reflection": {
+          "color": {
+            "r": 0.05,
+            "g": 0.28,
+            "b": 0.63
+          }
+        }
+      },
+      "mesh": {
+        "plane": {}
+      }
+    }
+  ],
+  "lights": [{
+    "id": 4,
+    "transform": {
+       "position": {
+         "x": 0.0,
+         "y": 8.0,
+         "z": 10.0
+       },
+       "rotation": {
+         "x": 45.0,
+         "y": -45.0,
+         "z": -70.0
+       }
+    },
+    "color": {
+       "r": 1000.0,
+       "g": 1000.0,
+       "b": 1000.0
+    },
+    "point": {}
+  }],
+  "materials": []
+}
