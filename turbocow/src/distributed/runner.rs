@@ -289,8 +289,20 @@ fn run_display() {
     let (_, mut redis_connection) = connect_to_redis();
     info!("connected to redis");
 
-    let last_task_id: u64 = redis_connection.get("turbocow_task_id_counter")
-        .expect("Failed to get the value of task id counter");
+    let last_task_id = loop {
+        let last_task_id: Option<u64> = redis_connection.get("turbocow_task_id_counter")
+            .expect("Failed to get the value of task id counter");
+
+        match last_task_id {
+            Some(v) => {
+                break v;
+            },
+            None => {
+                warn!("No task set, waiting...");
+                thread::sleep(Duration::from_secs(1));
+            }
+        };
+    };
 
     let scene: Vec<u8> = redis_connection.get(format!("turbocow_scene:{}", last_task_id)).expect("Failed to get scene from redis");
     let scene = sceneformat::decode(&scene).expect("Failed to decode scene");
