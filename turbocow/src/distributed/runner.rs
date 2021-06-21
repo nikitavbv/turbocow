@@ -55,7 +55,7 @@ fn run_init(options: &HashMap<String, String>) {
         .expect("Failed to encode .cowscene to binary");
 
     info!("Creating a new distributed task");
-    let (_, mut redis_connection) = connect_to_redis();
+    let (_, mut redis_connection) = connect_to_redis().expect("Failed to get redis connection");
     info!("Connected to redis");
 
     let task_id = redis_connection.incr::<&str, u64, u64>("turbocow_task_id_counter", 1)
@@ -137,7 +137,7 @@ fn run_worker_with_retries(retries: usize) {
     }
 
     info!("connecting to redis...");
-    let (_, mut redis_connection) = connect_to_redis();
+    let (_, mut redis_connection) = connect_to_redis().expect("Failed to get redis connection");
     info!("connected to redis");
 
     let mut scene: Option<Scene> = None;
@@ -200,7 +200,7 @@ fn run_worker_with_retries(retries: usize) {
 fn start_task_io_thread(task_tx: Sender<DistributedMessage>, pixel_rx: Receiver<DistributedMessage>) -> JoinHandle<()> {
     thread::spawn(move || {
         info!("connecting to redis (io thread)...");
-        let (_, mut redis_connection) = connect_to_redis();
+        let (_, mut redis_connection) = connect_to_redis().expect("Failed to get redis connection");
         info!("connected to redis (io thread)");
 
         let mut target_queue_size = 8;
@@ -286,7 +286,7 @@ fn worker_process_pixel(pixel_tx: &Sender<DistributedMessage>, task_id: u64, sce
 
 fn run_display() {
     info!("connecting to redis...");
-    let (_, mut redis_connection) = connect_to_redis();
+    let (mut redis_client, mut redis_connection) = connect_to_redis().expect("Failed to get redis connection");
     info!("connected to redis");
 
     let last_task_id = loop {
@@ -333,8 +333,25 @@ fn run_display() {
         let now = Instant::now();
         if (now - prev_update_time).as_millis() >= 16 {
             let mut pipeline = &mut redis::pipe();
-            let pixels_in_queue = redis_connection.llen::<&str, usize>("turbocow_pixels")
-                .expect("Failed to get total pixels in queue");
+            let pixels_in_queue = match redis_connection.llen::<&str, usize>("turbocow_pixels") {
+                Ok(v) => v,
+                Err(err) => {
+                    prev_update_time = now;
+
+                    if err.is_connection_dropped() || err.is_io_error() {
+                        info!("Reconnecting to redis...");
+                        let connection_result = match connect_to_redis() {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
+                        redis_client = connection_result.0;
+                        redis_connection = connection_result.1;
+                        continue;
+                    } else {
+                        panic!("Failed to get pixels in queue: {:?}", err);
+                    }
+                }
+            };
             for _ in 0..pixels_in_queue {
                 pipeline = pipeline.lpop("turbocow_pixels".to_string());
             }
@@ -364,7 +381,7 @@ fn run_display() {
 
 fn run_status() {
     info!("connecting to redis...");
-    let (_, mut redis_connection) = connect_to_redis();
+    let (_, mut redis_connection) = connect_to_redis().expect("Failed to get redis connection");
     info!("connected to redis");
 
     let last_task_id: Option<u64> = redis_connection.get("turbocow_task_id_counter")
@@ -399,7 +416,7 @@ fn run_status() {
 }
 
 fn run_reset() {
-    let (_, mut redis_connection) = connect_to_redis();
+    let (_, mut redis_connection) = connect_to_redis().expect("Failed to get redis connection");
 
     // keyspace is not big, so using "keys" is ok here
     let keys: Vec<String> = redis_connection.keys("turbocow_*")
@@ -413,10 +430,10 @@ fn run_reset() {
     info!("Completed reset for task");
 }
 
-fn connect_to_redis() -> (redis::Client, redis::Connection) {
+fn connect_to_redis() -> Result<(redis::Client, redis::Connection), RedisError> {
     let client = redis::Client::open(redis_address()).expect("Failed to connect to redis");
-    let redis_connection = client.get_connection().expect("Failed to get redis connection");
-    (client, redis_connection)
+    let redis_connection = client.get_connection()?;
+    Ok((client, redis_connection))
 }
 
 fn redis_address() -> String {
