@@ -366,7 +366,7 @@ fn run_display() {
                         DistributedMessage::SetPixel { task_id: _, x, y, r, g, b } => {
                             buffer[y * width + x] = ((r as u32) << 16) | ((g as u32) << 8) | (b as u32);
                         },
-                        other => panic!("Unexpected message in pixel queue: {:?}"),
+                        other => panic!("Unexpected message in pixel queue: {:?}", other),
                     }
                 }
             }
