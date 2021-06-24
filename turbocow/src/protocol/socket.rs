@@ -197,7 +197,7 @@ fn udp_receiver_handler(mut socket: UdpSocket, tx: Sender<(Message, MessageMetad
     }
 }
 
-fn udp_sender_handler(mut socket: UdpSocket, rx: Receiver<(Message, MessageMetadata)>, default_target: Option<SocketAddr>) {
+fn udp_sender_handler(socket: UdpSocket, rx: Receiver<(Message, MessageMetadata)>, default_target: Option<SocketAddr>) {
     let mut messages_to_send: Vec<(Message, MessageMetadata)> = Vec::with_capacity(32);
     let mut total_messages = 0;
     let mut last_push = Instant::now();
