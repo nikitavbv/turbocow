@@ -183,7 +183,7 @@ fn start_tcp_client(target: Ipv4Addr, rx: Receiver<(Message, MessageMetadata)>, 
     }))
 }
 
-fn udp_receiver_handler(mut socket: UdpSocket, tx: Sender<(Message, MessageMetadata)>) {
+fn udp_receiver_handler(socket: UdpSocket, tx: Sender<(Message, MessageMetadata)>) {
     let mut buffer = [0; 65536];
 
     loop {
