@@ -172,7 +172,7 @@ fn start_tcp_client(target: Ipv4Addr, rx: Receiver<(Message, MessageMetadata)>, 
     })?;
     socket.set_nodelay(true).unwrap();
 
-    let mut receiver_stream = socket.try_clone().unwrap();
+    let receiver_stream = socket.try_clone().unwrap();
     let receiver_handle = thread::spawn(move || {
         tcp_receiver_handler(receiver_stream, tx)
     });
