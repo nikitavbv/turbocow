@@ -167,7 +167,7 @@ fn start_udp_client(target: Ipv4Addr, rx: Receiver<(Message, MessageMetadata)>, 
 
 fn start_tcp_client(target: Ipv4Addr, rx: Receiver<(Message, MessageMetadata)>, tx: Sender<(Message, MessageMetadata)>) -> Result<JoinHandle<()>, CowSocketError> {
     let target = SocketAddrV4::new(target, 30422);
-    let mut socket = TcpStream::connect(target).map_err(|err| CowSocketError::FailedToConnect {
+    let socket = TcpStream::connect(target).map_err(|err| CowSocketError::FailedToConnect {
         description: format!("Failed to connect to server: {:?}", err)
     })?;
     socket.set_nodelay(true).unwrap();
