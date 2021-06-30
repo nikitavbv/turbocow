@@ -154,7 +154,7 @@ fn start_tcp_server(mut rx: Receiver<(Message, MessageMetadata)>, send_tx: Sende
 
 fn start_udp_client(target: Ipv4Addr, rx: Receiver<(Message, MessageMetadata)>, tx: Sender<(Message, MessageMetadata)>, default_target: Option<SocketAddr>) -> JoinHandle<()> {
     thread::spawn(move || {
-        let mut socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let receiver_socket = socket.try_clone().unwrap();
 
         let receiver_handle = thread::spawn(move || udp_receiver_handler(receiver_socket, tx));
