@@ -136,7 +136,7 @@ fn start_tcp_server(mut rx: Receiver<(Message, MessageMetadata)>, send_tx: Sende
 
         for stream in socket.incoming() {
             info!("new tcp connection established");
-            let mut stream_read = stream.unwrap();
+            let stream_read = stream.unwrap();
             let stream_write = stream_read.try_clone().unwrap();
 
             let rx_handle = thread::spawn(move || tcp_sender_handler(stream_write, rx));
