@@ -24,6 +24,7 @@ impl WindowOutput {
     }
 
     pub fn new(socket: CowSocket) -> Self {
+        // for some reason this crashes on MacOS if run from non-main thread
         let mut window = Window::new(
             "turbocow",
             1000,
